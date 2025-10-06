@@ -1,0 +1,358 @@
+<dashboard version="1.1" theme="dark">
+  <label>Analyst OpenCTI Threat Match Overview</label>
+  <description>IOC matches summarized from your telemetry with drilldowns to raw events.</description>
+
+  <init>
+    <set token="show_domains">1</set>
+  </init>
+
+  <fieldset submitButton="true">
+    <input type="time" token="time">
+      <label>Time range</label>
+      <default>
+        <earliest>-1h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+
+  <search id="base">
+    <query>
+      index=opencti_alerts sourcetype=opencti:*
+      | fields _time sourcetype kind ioc score hits match_value ip hash url_candidate last_seen src_index created_by confidence labels
+      | eval last_seen_str=strftime(last_seen, "%Y-%m-%d %H:%M:%S")
+    </query>
+    <earliest>$time.earliest$</earliest>
+    <latest>$time.latest$</latest>
+  </search>
+
+  <row>
+    <panel>
+      <single>
+        <title>Flagged Files</title>
+        <search base="base">
+          <query>| search sourcetype="opencti:file_hash_match" | eval indicator=coalesce(ioc, match_value) | stats dc(indicator) as count</query>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">all</option>
+        <drilldown>
+          <set token="show_files">1</set>
+          <unset token="show_domains"/>
+          <unset token="show_urls"/>
+          <unset token="show_ips"/>
+        </drilldown>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Flagged Domains</title>
+        <search>
+          <query>
+            index=opencti_alerts sourcetype=opencti:dns_match earliest=$time.earliest$ latest=$time.latest$
+            | eval domain=coalesce(match_value, fqdn, domain, ioc)
+            | where isnotnull(domain) AND domain!=""
+            | stats dc(domain) as count
+          </query>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
+        <option name="rangeValues">[1]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">all</option>
+        <drilldown>
+          <set token="show_domains">1</set>
+          <unset token="show_files"/>
+          <unset token="show_urls"/>
+          <unset token="show_ips"/>
+        </drilldown>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Flagged URLs</title>
+        <search base="base">
+          <query>| search sourcetype="opencti:url_match" | stats dc(url_candidate) as count</query>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
+        <option name="rangeValues">[0]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">all</option>
+        <drilldown>
+          <set token="show_urls">1</set>
+          <unset token="show_files"/>
+          <unset token="show_domains"/>
+          <unset token="show_ips"/>
+        </drilldown>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Flagged IP addresses</title>
+        <search>
+          <query>
+            index=opencti_alerts sourcetype=opencti:ip_match earliest=$time.earliest$ latest=$time.latest$
+            | stats dc(ip) as count
+          </query>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
+        <option name="rangeValues">[1]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">all</option>
+        <drilldown>
+          <set token="show_ips">1</set>
+          <unset token="show_files"/>
+          <unset token="show_domains"/>
+          <unset token="show_urls"/>
+        </drilldown>
+      </single>
+    </panel>
+  </row>
+
+  <!-- Domains section -->
+  <row depends="$show_domains$">
+    <panel>
+      <table>
+        <title>Domain Matches</title>
+        <search>
+          <query>
+            index=opencti_alerts sourcetype=opencti:dns_match earliest=$time.earliest$ latest=$time.latest$
+            | eval domain=coalesce(match_value, fqdn, domain, ioc)
+            | where isnotnull(domain) AND domain!=""
+            | eval hits=if(isnum(hits), hits, 1)
+            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by max(confidence) as confidence by domain ioc score
+            | eval indicator=domain, type="domain", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
+            | eval Rating=coalesce(ioc_rating, "Unreviewed")
+            | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
+            | rename domain AS Domain score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
+            | table Rating Domain Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | rename note AS Notes
+            | sort - hits | head 20
+          </query>
+        </search>
+        <option name="count">15</option>
+        <drilldown>
+          <set token="dd.value">$row.Domain$</set>
+          <set token="dd.src_index">$row.Index$</set>
+          <set token="dd.last_seen">$row.Last Time Seen$</set>
+          <set token="dd.type">domain</set>
+          <eval token="dd.earliest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "-5s")</eval>
+          <eval token="dd.latest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "+5s")</eval>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+
+  <!-- Inline action controls: only visible after a row click -->
+  <row depends="$dd.value$">
+    <panel>
+      <html>
+        <div style="margin:8px 12px;">
+          <a class="btn" target="_blank" href="search?q=%7C%20makeresults%20count%3D1%20%7C%20eval%20indicator%3D%22$dd.value$%22%2C%20type%3D%22$dd.type$%22%2C%20ioc_rating%3D%22malicious%22%2C%20decided_at%3Dnow()%2C%20decided_by%3D%22$env:user$%22%2C%20note%3D%22%3Cadd%20comments%3E%22%20%7C%20eval%20_key%3Dmd5(type.%22%7C%22.indicator)%20%7C%20outputlookup%20opencti_seenbefore_kv%20append%3Dtrue">Mark Malicious (Open in Search)</a>
+          <a class="btn" style="margin-left:12px;" target="_blank" href="search?q=%7C%20makeresults%20count%3D1%20%7C%20eval%20indicator%3D%22$dd.value$%22%2C%20type%3D%22$dd.type$%22%2C%20ioc_rating%3D%22benign%22%2C%20decided_at%3Dnow()%2C%20decided_by%3D%22$env:user$%22%2C%20note%3D%22%3Cadd%20comments%3E%22%20%7C%20eval%20_key%3Dmd5(type.%22%7C%22.indicator)%20%7C%20outputlookup%20opencti_seenbefore_kv%20append%3Dtrue">Mark Benign (Open in Search)</a>
+          <a class="btn" style="margin-left:12px;" target="_blank" href="search?q=%7C%20makeresults%20count%3D1%20%7C%20eval%20indicator%3D%22$dd.value$%22%2C%20type%3D%22$dd.type$%22%2C%20ioc_rating%3D%22unreviewed%22%2C%20decided_at%3Dnow()%2C%20decided_by%3D%22$env:user$%22%2C%20note%3D%22%22%20%7C%20eval%20_key%3Dmd5(type.%22%7C%22.indicator)%20%7C%20outputlookup%20opencti_seenbefore_kv%20append%3Dtrue">Clear (Unreviewed) — Open in Search</a>
+        </div>
+      </html>
+    </panel>
+  </row>
+  <row depends="$dd.value$">
+    <panel>
+      <html>
+        <div style="margin:8px 12px;">
+          <strong>Selected:</strong>
+          <code>$dd.type$ = $dd.value$</code>
+          <span style="margin-left:12px; color:#9aa;">(index: $dd.src_index$)</span>
+          <span style="margin-left:16px;"><a target="_blank" href="search?q=search%20index%3D$dd.src_index$%20%22$dd.value$%22&amp;earliest=$dd.earliest$&amp;latest=$dd.latest$">View last ±5s</a></span>
+          <span style="margin-left:16px;"><a href="#" onclick="SplunkDashboardUtils.unsetToken('dd.value');SplunkDashboardUtils.unsetToken('dd.type');SplunkDashboardUtils.unsetToken('dd.src_index');SplunkDashboardUtils.unsetToken('dd.last_seen');SplunkDashboardUtils.unsetToken('dd.earliest');SplunkDashboardUtils.unsetToken('dd.latest');return false;">Clear selection</a></span>
+        </div>
+      </html>
+    </panel>
+  </row>
+  
+  <row depends="$show_domains$">
+    <panel>
+      <table>
+        <title>Rolling Domain Matches</title>
+        <search base="base">
+          <query>
+            | search sourcetype="opencti:dns_match"
+            | eval indicator=coalesce(match_value, fqdn, domain, ioc)
+            | where last_seen &gt;= relative_time(now(), "@d")
+            | rename src_index AS Index
+            | fields last_seen last_seen_str kind sourcetype score hits indicator ioc match_value Index created_by confidence labels
+            | sort - last_seen
+            | head 200
+          </query>
+        </search>
+        <option name="count">15</option>
+      </table>
+    </panel>
+  </row>
+
+  
+
+  <!-- IPs section -->
+  <row depends="$show_ips$">
+    <panel>
+      <table>
+        <title>IP Matches</title>
+        <search>
+          <query>
+            index=opencti_alerts sourcetype=opencti:ip_match earliest=$time.earliest$ latest=$time.latest$
+            | eval hits=if(isnum(hits), hits, 1)
+            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by max(confidence) as confidence by ip ioc score
+            | eval indicator=ip, type="ip", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
+            | eval Rating=coalesce(ioc_rating, "Unreviewed")
+            | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
+            | rename ip AS IP score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
+            | table Rating IP Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | rename note AS Notes
+            | sort - hits | head 20
+          </query>
+        </search>
+        <option name="count">15</option>
+        <drilldown>
+          <set token="dd.value">$row.IP$</set>
+          <set token="dd.src_index">$row.Index$</set>
+          <set token="dd.last_seen">$row.Last Time Seen$</set>
+          <set token="dd.type">ip</set>
+          <eval token="dd.earliest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "-5s")</eval>
+          <eval token="dd.latest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "+5s")</eval>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row depends="$show_ips$">
+    <panel>
+      <table>
+        <title>Rolling IP Matches</title>
+        <search base="base">
+          <query>
+            | search sourcetype="opencti:ip_match"
+            | eval indicator=ip
+            | where last_seen &gt;= relative_time(now(), "@d")
+            | rename src_index AS Index
+            | fields last_seen last_seen_str kind sourcetype score hits indicator ioc ip Index created_by confidence labels
+            | sort - last_seen
+            | head 200
+          </query>
+        </search>
+        <option name="count">15</option>
+      </table>
+    </panel>
+  </row>
+
+  <!-- URLs section (placeholder) -->
+  <row depends="$show_urls$">
+    <panel>
+      <table>
+        <title>URL Matches</title>
+        <search>
+          <query>
+            index=opencti_alerts sourcetype=opencti:url_match earliest=$time.earliest$ latest=$time.latest$
+            | eval hits=if(isnum(hits), hits, 1)
+            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by max(confidence) as confidence by url_candidate ioc score
+            | eval indicator=url_candidate, type="url", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
+            | eval Rating=coalesce(ioc_rating, "Unreviewed")
+            | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
+            | rename url_candidate AS URL score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
+            | table Rating URL Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | rename note AS Notes
+            | sort - hits | head 20
+          </query>
+        </search>
+        <option name="count">15</option>
+        <drilldown>
+          <set token="dd.value">$row.URL$</set>
+          <set token="dd.src_index">$row.Index$</set>
+          <set token="dd.last_seen">$row.Last Time Seen$</set>
+          <set token="dd.type">url</set>
+          <eval token="dd.earliest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "-5s")</eval>
+          <eval token="dd.latest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "+5s")</eval>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row depends="$show_urls$">
+    <panel>
+      <table>
+        <title>Rolling URL Matches</title>
+        <search base="base">
+          <query>
+            | search sourcetype="opencti:url_match"
+            | eval indicator=url_candidate
+            | where last_seen &gt;= relative_time(now(), "@d")
+            | rename src_index AS Index
+            | fields last_seen last_seen_str kind sourcetype score hits indicator ioc url_candidate Index created_by confidence labels
+            | sort - last_seen
+            | head 200
+          </query>
+        </search>
+        <option name="count">15</option>
+      </table>
+    </panel>
+  </row>
+
+  <!-- Files section -->
+  <row depends="$show_files$">
+    <panel>
+      <table>
+        <title>File Hash Matches</title>
+        <search>
+          <query>
+            index=opencti_alerts sourcetype=opencti:file_hash_match earliest=$time.earliest$ latest=$time.latest$
+            | eval hits=if(isnum(hits), hits, 1)
+            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by max(confidence) as confidence by hash ioc score
+            | eval indicator=hash, type="file", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
+            | eval Rating=coalesce(ioc_rating, "Unreviewed")
+            | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
+            | rename hash AS Hash score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
+            | table Rating Hash Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | rename note AS Notes
+            | sort - hits | head 20
+          </query>
+        </search>
+        <option name="count">15</option>
+        <drilldown>
+          <set token="dd.value">$row.Hash$</set>
+          <set token="dd.src_index">$row.Index$</set>
+          <set token="dd.last_seen">$row.Last Time Seen$</set>
+          <set token="dd.type">file</set>
+          <eval token="dd.earliest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "-5s")</eval>
+          <eval token="dd.latest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "+5s")</eval>
+        </drilldown>
+      </table>
+    </panel>
+  </row>
+  <row depends="$show_files$">
+    <panel>
+      <table>
+        <title>Rolling File Hash Matches</title>
+        <search base="base">
+          <query>
+            | search sourcetype="opencti:file_hash_match"
+            | eval indicator=hash
+            | where last_seen &gt;= relative_time(now(), "@d")
+            | rename src_index AS Index
+            | fields last_seen last_seen_str kind sourcetype score hits indicator ioc hash Index created_by confidence labels
+            | sort - last_seen
+            | head 200
+          </query>
+        </search>
+        <option name="count">15</option>
+      </table>
+    </panel>
+  </row>
+
+</dashboard>

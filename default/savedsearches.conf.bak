@@ -1,0 +1,145 @@
+[00_smoketest_collect]
+enableSched = 1
+cron_schedule = */5 * * * *
+dispatch.earliest_time = -4m@m
+dispatch.latest_time   = now
+search = | makeresults count=1
+         | eval msg="SA-opencti-dashboard-alerts smoketest",
+                when=strftime(now(), "%F %T"),
+                marker="smoketest"
+         | eval _time=now()
+         | `m_collect_opencti_alerts("opencti:summary","smoketest")`
+
+[21_refresh_opencti_domains_kv]
+description = Derive wildcard-able domain patterns from opencti_lookup into KV
+enableSched = 1
+cron_schedule = */15 * * * *
+dispatch.earliest_time = -1h
+dispatch.latest_time = now
+# 1) Read your master lookup
+# 2) Normalize "name" (lowercase, strip http://, trailing dots)
+# 3) Keep only things that look like a domain (simple regex)
+# 4) Create TWO rows per domain: "domain.com" AND "*.domain.com"
+# 5) Write to KV lookup "opencti_lookup_domain" (replaces content)
+search = | inputlookup opencti_lookup
+| eval name=lower(name)
+| eval name=replace(name, "^https?://", "")
+| eval name=rtrim(name,".")
+| where match(name, "^[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+| eval domain_raw=name
+| eval domain_patterns=mvappend(domain_raw, "*.".domain_raw)
+| mvexpand domain_patterns
+| rename domain_patterns AS domain
+| table domain name score labels
+| dedup domain
+| outputlookup opencti_lookup_domain
+
+[22_refresh_opencti_ips_kv]
+description = Derive CIDR-capable IP ranges from opencti_lookup into KV
+enableSched = 1
+cron_schedule = */15 * * * *
+dispatch.earliest_time = -1h
+dispatch.latest_time = now
+# 1) Read your master lookup
+# 2) Normalize "name"
+# 3) Keep IPs and CIDRs (basic IPv4 detection)
+# 4) Convert single IPs to /32
+# 5) Write to KV lookup "opencti_lookup_ip" (replaces content)
+search = | inputlookup opencti_lookup
+| eval name=lower(name)
+| eval is_cidr = if(match(name, "^\\d{1,3}(?:\\.\\d{1,3}){3}/\\d{1,2}$"), 1, 0)
+| eval is_ip   = if(match(name, "^\\d{1,3}(?:\\.\\d{1,3}){3}$"), 1, 0)
+| where is_cidr=1 OR is_ip=1
+| eval ip = if(is_ip=1, name."/32", name)
+| table ip name score labels
+| dedup ip
+| outputlookup opencti_lookup_ip
+
+[30_dns_match_opencti]
+description = Match Zeek DNS FQDNs to OpenCTI domain patterns, write alerts
+enableSched = 1
+cron_schedule = */5 * * * *
+dispatch.earliest_time = -6m@m
+dispatch.latest_time   = now
+# Adjust index name if yours is different from "zeek_dns"
+search = index=zeek_dns
+| eval fqdn=lower(rtrim(query,"."))
+| lookup opencti_lookup_domain domain AS fqdn OUTPUTNEW name AS ioc, score, labels
+| where isnotnull(ioc)
+| stats count AS hits earliest(_time) AS first_seen latest(_time) AS last_seen values(labels) AS labels BY fqdn ioc score
+| eval kind="dns_match"
+| eval _time=last_seen
+| eval alert_summary = "FQDN=" . fqdn . " IOC=" . ioc . " score=" . tostring(score)
+| `m_collect_opencti_alerts("opencti:dns_match","dns_match")`
+
+[31_conn_match_opencti]
+description = Match Zeek Conn IPs to OpenCTI IP/CIDR patterns, write alerts
+enableSched = 1
+cron_schedule = */5 * * * *
+dispatch.earliest_time = -6m@m
+dispatch.latest_time   = now
+# Adjust index/sourcetype/field names if your Zeek fields differ
+search = index=zeek_conn
+| eval ips=mvappend(src_ip, dest_ip, src, dest, 'id.orig_h', 'id.resp_h')
+| mvexpand ips
+| where isnotnull(ips)
+| rename ips AS ip
+| lookup opencti_lookup_ip ip AS ip OUTPUTNEW name AS ioc, score, labels
+| where isnotnull(ioc)
+| stats count AS hits earliest(_time) AS first_seen latest(_time) AS last_seen values(labels) AS labels BY ip ioc score
+| eval kind="ip_match"
+| eval _time=last_seen
+| eval alert_summary = "IP=" . ip . " IOC=" . ioc . " score=" . tostring(score)
+| `m_collect_opencti_alerts("opencti:ip_match","ip_match")`
+
+# REPLACES the earlier [31_conn_match_opencti] with a source/field-agnostic version
+[31_ip_match_opencti]
+description = Match any IPs from ip_event_sources to OpenCTI IP/CIDR patterns, write alerts
+enableSched = 1
+cron_schedule = */5 * * * *
+dispatch.earliest_time = -6m@m
+dispatch.latest_time   = now
+
+search = `ip_event_sources`
+| `m_extract_ip_candidates`                            /* normalize to field 'ip' */
+| lookup opencti_lookup_ip ip AS ip OUTPUTNEW name AS ioc, score, labels
+| where isnotnull(ioc)
+| eval role = case(ip='id.orig_h',"src", ip='id.resp_h',"dest", ip=src OR ip=src_ip OR ip='source.ip',"src", ip=dest OR ip=dest_ip OR ip='destination.ip',"dest", 1=1,"unknown")
+| stats count AS hits earliest(_time) AS first_seen latest(_time) AS last_seen values(labels) AS labels by ip ioc score role
+| eval kind="ip_match"
+| eval _time=last_seen
+| eval alert_summary = "IP=" . ip . " role=" . role . " IOC=" . ioc . " score=" . tostring(score)
+| `m_collect_opencti_alerts("opencti:ip_match","ip_match")`
+
+# MANUAL backfill for DNS matches (run on demand; not scheduled)
+[90_backfill_dns_match_opencti]
+description = Backfill DNS vs OpenCTI domains (edit time range in UI before running)
+enableSched = 0
+dispatch.earliest_time = -24h
+dispatch.latest_time   = now
+search = index=zeek_dns
+| eval fqdn=lower(rtrim(query,"."))
+| lookup opencti_lookup_domain domain AS fqdn OUTPUTNEW name AS ioc, score, labels
+| where isnotnull(ioc)
+| stats count AS hits earliest(_time) AS first_seen latest(_time) AS last_seen values(labels) AS labels BY fqdn ioc score
+| eval kind="dns_match_backfill"
+| eval _time=last_seen
+| eval alert_summary = "FQDN=" . fqdn . " IOC=" . ioc . " score=" . tostring(score)
+| `m_collect_opencti_alerts("opencti:dns_match","dns_match")`
+
+# MANUAL backfill for IP matches (run on demand; not scheduled)
+[91_backfill_ip_match_opencti]
+description = Backfill IPs vs OpenCTI IP/CIDR (edit time range in UI before running)
+enableSched = 0
+dispatch.earliest_time = -24h
+dispatch.latest_time   = now
+search = `ip_event_sources`
+| `m_extract_ip_candidates`
+| lookup opencti_lookup_ip ip AS ip OUTPUTNEW name AS ioc, score, labels
+| where isnotnull(ioc)
+| eval role = case(ip='id.orig_h',"src", ip='id.resp_h',"dest", ip=src OR ip=src_ip OR ip='source.ip',"src", ip=dest OR ip=dest_ip OR ip='destination.ip',"dest", 1=1,"unknown")
+| stats count AS hits earliest(_time) AS first_seen latest(_time) AS last_seen values(labels) AS labels BY ip ioc score role
+| eval kind="ip_match_backfill"
+| eval _time=last_seen
+| eval alert_summary = "IP=" . ip . " role=" . role . " IOC=" . ioc . " score=" . tostring(score)
+| `m_collect_opencti_alerts("opencti:ip_match","ip_match")`

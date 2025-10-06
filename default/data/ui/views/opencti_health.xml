@@ -1,0 +1,82 @@
+<dashboard version="1.1" theme="dark">
+  <label>OpenCTI Threat Match Health</label>
+
+  <fieldset submitButton="false">
+    <input type="time" token="time">
+      <label>Time range</label>
+      <default>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+
+  <row>
+    <panel>
+      <single>
+        <title>Domain IOC count (KV)</title>
+        <search>
+          <query>| inputlookup sa_opencti_domain_kv | stats count</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>IP IOC count (KV)</title>
+        <search>
+          <query>| inputlookup sa_opencti_ip_kv | stats count</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>URL IOC count (KV)</title>
+        <search>
+          <query>| inputlookup opencti_lookup_url | stats count</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Hash IOC count (KV)</title>
+        <search>
+          <query>| inputlookup opencti_lookup_hash | stats count</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Summary events (last 24h)</title>
+        <search>
+          <query>index=opencti_alerts earliest=-24h | stats count</query>
+        </search>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>Summary events over time</title>
+        <search>
+          <query>index=opencti_alerts earliest=$time.earliest$ latest=$time.latest$ | bin _time span=30m | stats count by _time sourcetype</query>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+    <panel>
+      <table>
+        <title>Scheduler status (last 24h)</title>
+        <search>
+          <query>
+            index=_internal sourcetype=scheduler app=SA-opencti-dashboard-alerts earliest=-24h
+            | stats latest(status) as last_status latest(run_time) as last_runtime by savedsearch_name
+            | sort savedsearch_name
+          </query>
+        </search>
+        <option name="count">15</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>

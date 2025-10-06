@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# Splunk app build artifacts
+*.spl
+*.tar.gz
+dist/
+build/
+
+# Splunk local-only configs (ship defaults; keep locals on your machines)
+local/
+metadata/local.meta
+
+# Runtime/generated data (adjust to your project)
+lookups/generated/*
+var/
+tmp/
+
+# Node builds (if you ever add a UI build step)
+node_modules/
+
+# generated/runtime lookup caches
+lookups/*_cache.csv
+lookups/generated/**
