@@ -30,6 +30,14 @@
     </panel>
     <panel>
       <single>
+        <title>Email IOC count (KV)</title>
+        <search>
+          <query>| inputlookup opencti_lookup_email | stats count</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
         <title>URL IOC count (KV)</title>
         <search>
           <query>| inputlookup opencti_lookup_url | stats count</query>
@@ -71,7 +79,9 @@
         <search>
           <query>
             index=_internal sourcetype=scheduler app=SA-opencti-dashboard-alerts earliest=-24h
-            | stats latest(status) as last_status latest(run_time) as last_runtime by savedsearch_name
+            | stats latest(status) as last_status latest(_time) as last_run_epoch by savedsearch_name
+            | eval last_runtime=strftime(last_run_epoch, "%H:%M %d %m %Y")
+            | fields savedsearch_name last_status last_runtime
             | sort savedsearch_name
           </query>
         </search>

@@ -24,6 +24,7 @@ A Splunk app that enriches your network telemetry with OpenCTI indicators of com
     - DNS: macro `dns_event_sources` (e.g., Zeek DNS)
     - IP: macro `ip_event_sources` + `m_extract_ip_candidates`
   - Matches are summarized and written to `index=opencti_alerts` (macro `opencti_alerts_index`) by `collect`.
+  - Summary index model: `opencti_alerts` is a summary index. Each matcher aggregates raw events (stats … BY indicator) and writes a single summary row per run window carrying `hits`, `first_seen`, `last_seen`, and sets `_time=last_seen`. You will not see one summary event per raw hit; this keeps the index small and dashboards fast.
 
 - Fields written to `index=opencti_alerts`
   - From OpenCTI KV lookups (`opencti_lookup_domain` / `opencti_lookup_ip`):
@@ -76,7 +77,7 @@ A Splunk app that enriches your network telemetry with OpenCTI indicators of com
 ## Configuration & Customization
 - Macros you can tune
   - `opencti_alerts_index`: target summary index (default: `opencti_alerts`)
-  - `dns_event_sources`, `ip_event_sources`, `http_event_sources`, `files_event_sources`: define your source indexes.
+  - `dns_event_sources`, `ip_event_sources`, `url_event_sources`, `files_event_sources`: define your source indexes.
   - `m_extract_ip_candidates`: list of candidate fields for IP extraction.
 
 - Lookups & transforms

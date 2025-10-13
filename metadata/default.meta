@@ -1,3 +1,47 @@
 []
 access = read : [ * ], write : [ admin ]
 export = system
+
+[collections-conf/opencti_domains_kv]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[collections-conf/opencti_ips_kv]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[collections-conf/opencti_urls_kv]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[collections-conf/opencti_hashes_kv]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[collections-conf/opencti_emails_kv]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[collections-conf/opencti_seenbefore_kv]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[transforms/opencti_lookup_email]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[transforms/opencti_lookup_url]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[transforms/opencti_lookup_hash]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[transforms/opencti_lookup_domain]
+access = read : [ * ], write : [ admin ]
+export = system
+
+[transforms/opencti_lookup_ip]
+access = read : [ * ], write : [ admin ]
+export = system

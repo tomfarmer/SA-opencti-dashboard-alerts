@@ -31,7 +31,7 @@
       <single>
         <title>Flagged Files</title>
         <search base="base">
-          <query>| search sourcetype="opencti:file_hash_match" | eval indicator=coalesce(ioc, match_value) | stats dc(indicator) as count</query>
+          <query>| search sourcetype="opencti:file_hash_match" | eval indicator=coalesce(hash,ioc,match_value) | stats latest(last_seen) as ls by indicator | eval ls=tonumber(ls) | where ls&gt;=relative_time(now(), "$time.earliest$") | stats count</query>
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
@@ -43,6 +43,7 @@
           <unset token="show_domains"/>
           <unset token="show_urls"/>
           <unset token="show_ips"/>
+          <unset token="show_emails"/>
         </drilldown>
       </single>
     </panel>
@@ -55,7 +56,10 @@
             index=opencti_alerts sourcetype=opencti:dns_match earliest=$time.earliest$ latest=$time.latest$
             | eval domain=coalesce(match_value, fqdn, domain, ioc)
             | where isnotnull(domain) AND domain!=""
-            | stats dc(domain) as count
+            | stats latest(last_seen) as ls by domain
+            | eval ls=tonumber(ls)
+            | where ls&gt;=relative_time(now(), "$time.earliest$")
+            | stats count
           </query>
         </search>
         <option name="colorMode">block</option>
@@ -68,6 +72,7 @@
           <unset token="show_files"/>
           <unset token="show_urls"/>
           <unset token="show_ips"/>
+          <unset token="show_emails"/>
         </drilldown>
       </single>
     </panel>
@@ -76,7 +81,7 @@
       <single>
         <title>Flagged URLs</title>
         <search base="base">
-          <query>| search sourcetype="opencti:url_match" | stats dc(url_candidate) as count</query>
+          <query>| search sourcetype="opencti:url_match" | stats latest(last_seen) as ls by url_candidate | eval ls=tonumber(ls) | where ls&gt;=relative_time(now(), "$time.earliest$") | stats count</query>
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
@@ -88,6 +93,7 @@
           <unset token="show_files"/>
           <unset token="show_domains"/>
           <unset token="show_ips"/>
+          <unset token="show_emails"/>
         </drilldown>
       </single>
     </panel>
@@ -98,7 +104,10 @@
         <search>
           <query>
             index=opencti_alerts sourcetype=opencti:ip_match earliest=$time.earliest$ latest=$time.latest$
-            | stats dc(ip) as count
+            | stats latest(last_seen) as ls by ip
+            | eval ls=tonumber(ls)
+            | where ls&gt;=relative_time(now(), "$time.earliest$")
+            | stats count
           </query>
         </search>
         <option name="colorMode">block</option>
@@ -111,6 +120,27 @@
           <unset token="show_files"/>
           <unset token="show_domains"/>
           <unset token="show_urls"/>
+          <unset token="show_emails"/>
+        </drilldown>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Flagged Emails</title>
+        <search>
+          <query>index=opencti_alerts sourcetype=opencti:email_match earliest=$time.earliest$ latest=$time.latest$ | eval email=lower(email) | stats latest(last_seen) as ls by email ioc score role | eval ls=tonumber(ls) | where ls&gt;=relative_time(now(), "$time.earliest$") | stats count</query>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
+        <option name="rangeValues">[1]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">all</option>
+        <drilldown>
+          <set token="show_emails">1</set>
+          <unset token="show_files"/>
+          <unset token="show_domains"/>
+          <unset token="show_urls"/>
+          <unset token="show_ips"/>
         </drilldown>
       </single>
     </panel>
@@ -177,25 +207,7 @@
     </panel>
   </row>
   
-  <row depends="$show_domains$">
-    <panel>
-      <table>
-        <title>Rolling Domain Matches</title>
-        <search base="base">
-          <query>
-            | search sourcetype="opencti:dns_match"
-            | eval indicator=coalesce(match_value, fqdn, domain, ioc)
-            | where last_seen &gt;= relative_time(now(), "@d")
-            | rename src_index AS Index
-            | fields last_seen last_seen_str kind sourcetype score hits indicator ioc match_value Index created_by confidence labels
-            | sort - last_seen
-            | head 200
-          </query>
-        </search>
-        <option name="count">15</option>
-      </table>
-    </panel>
-  </row>
+  
 
   
 
@@ -231,25 +243,7 @@
       </table>
     </panel>
   </row>
-  <row depends="$show_ips$">
-    <panel>
-      <table>
-        <title>Rolling IP Matches</title>
-        <search base="base">
-          <query>
-            | search sourcetype="opencti:ip_match"
-            | eval indicator=ip
-            | where last_seen &gt;= relative_time(now(), "@d")
-            | rename src_index AS Index
-            | fields last_seen last_seen_str kind sourcetype score hits indicator ioc ip Index created_by confidence labels
-            | sort - last_seen
-            | head 200
-          </query>
-        </search>
-        <option name="count">15</option>
-      </table>
-    </panel>
-  </row>
+  
 
   <!-- URLs section (placeholder) -->
   <row depends="$show_urls$">
@@ -283,25 +277,30 @@
       </table>
     </panel>
   </row>
-  <row depends="$show_urls$">
+  
+
+  <!-- Emails section -->
+  <row depends="$show_emails$">
     <panel>
       <table>
-        <title>Rolling URL Matches</title>
-        <search base="base">
-          <query>
-            | search sourcetype="opencti:url_match"
-            | eval indicator=url_candidate
-            | where last_seen &gt;= relative_time(now(), "@d")
-            | rename src_index AS Index
-            | fields last_seen last_seen_str kind sourcetype score hits indicator ioc url_candidate Index created_by confidence labels
-            | sort - last_seen
-            | head 200
-          </query>
+        <title>Email Matches</title>
+        <search>
+          <query>index=opencti_alerts sourcetype=opencti:email_match earliest=$time.earliest$ latest=$time.latest$ | eval email=lower(email) | eval hits=if(isnum(hits), hits, 1) | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels latest(created_by) as created_by latest(confidence) as confidence by email ioc score role | eval indicator=email, type="email", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S") | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note | eval Rating=coalesce(ioc_rating, "Unreviewed") | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No") | rename email AS Email score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index role AS Role | table Rating Email Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index Role | rename note AS Notes | sort - hits | head 20</query>
         </search>
         <option name="count">15</option>
+        <drilldown>
+          <set token="dd.value">$row.Email$</set>
+          <set token="dd.src_index">$row.Index$</set>
+          <set token="dd.last_seen">$row.Last Time Seen$</set>
+          <set token="dd.type">email</set>
+          <eval token="dd.earliest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "-5s")</eval>
+          <eval token="dd.latest">relative_time(strptime("$row.Last Time Seen$", "%d %b %Y %H:%M:%S"), "+5s")</eval>
+        </drilldown>
       </table>
     </panel>
   </row>
+
+  
 
   <!-- Files section -->
   <row depends="$show_files$">
@@ -335,24 +334,6 @@
       </table>
     </panel>
   </row>
-  <row depends="$show_files$">
-    <panel>
-      <table>
-        <title>Rolling File Hash Matches</title>
-        <search base="base">
-          <query>
-            | search sourcetype="opencti:file_hash_match"
-            | eval indicator=hash
-            | where last_seen &gt;= relative_time(now(), "@d")
-            | rename src_index AS Index
-            | fields last_seen last_seen_str kind sourcetype score hits indicator ioc hash Index created_by confidence labels
-            | sort - last_seen
-            | head 200
-          </query>
-        </search>
-        <option name="count">15</option>
-      </table>
-    </panel>
-  </row>
+  
 
 </dashboard>
