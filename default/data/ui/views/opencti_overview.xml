@@ -64,7 +64,7 @@
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
-        <option name="rangeValues">[1]</option>
+        <option name="rangeValues">[0]</option>
         <option name="useColors">1</option>
         <option name="drilldown">all</option>
         <drilldown>
@@ -112,7 +112,7 @@
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
-        <option name="rangeValues">[1]</option>
+        <option name="rangeValues">[0]</option>
         <option name="useColors">1</option>
         <option name="drilldown">all</option>
         <drilldown>
@@ -132,7 +132,7 @@
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
-        <option name="rangeValues">[1]</option>
+        <option name="rangeValues">[0]</option>
         <option name="useColors">1</option>
         <option name="drilldown">all</option>
         <drilldown>
@@ -162,8 +162,9 @@
             | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
             | eval Rating=coalesce(ioc_rating, "Unreviewed")
             | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
+            | eval created_by=mvjoin(created_by, ", ")
             | rename domain AS Domain score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
-            | table Rating Domain Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | table Rating Domain "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
             | rename note AS Notes
             | sort - hits | head 20
           </query>
@@ -225,8 +226,9 @@
             | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
             | eval Rating=coalesce(ioc_rating, "Unreviewed")
             | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
+            | eval created_by=mvjoin(created_by, ", ")
             | rename ip AS IP score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
-            | table Rating IP Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | table Rating IP "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
             | rename note AS Notes
             | sort - hits | head 20
           </query>
@@ -259,8 +261,9 @@
             | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
             | eval Rating=coalesce(ioc_rating, "Unreviewed")
             | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
+            | eval created_by=mvjoin(created_by, ", ")
             | rename url_candidate AS URL score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
-            | table Rating URL Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | table Rating URL "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
             | rename note AS Notes
             | sort - hits | head 20
           </query>
@@ -285,7 +288,7 @@
       <table>
         <title>Email Matches</title>
         <search>
-          <query>index=opencti_alerts sourcetype=opencti:email_match earliest=$time.earliest$ latest=$time.latest$ | eval email=lower(email) | eval hits=if(isnum(hits), hits, 1) | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels latest(created_by) as created_by latest(confidence) as confidence by email ioc score role | eval indicator=email, type="email", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S") | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note | eval Rating=coalesce(ioc_rating, "Unreviewed") | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No") | rename email AS Email score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index role AS Role | table Rating Email Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index Role | rename note AS Notes | sort - hits | head 20</query>
+          <query>index=opencti_alerts sourcetype=opencti:email_match earliest=$time.earliest$ latest=$time.latest$ | eval email=lower(email) | eval hits=if(isnum(hits), hits, 1) | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by latest(confidence) as confidence by email ioc score role | eval indicator=email, type="email", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S") | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note | eval Rating=coalesce(ioc_rating, "Unreviewed") | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No") | eval created_by=mvjoin(created_by, ", ") | rename email AS Email score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index role AS Role | table Rating Email "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index Role | rename note AS Notes | sort - hits | head 20</query>
         </search>
         <option name="count">15</option>
         <drilldown>
@@ -316,8 +319,9 @@
             | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
             | eval Rating=coalesce(ioc_rating, "Unreviewed")
             | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
+            | eval created_by=mvjoin(created_by, ", ")
             | rename hash AS Hash score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
-            | table Rating Hash Score "Times Seen" Tags "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | table Rating Hash "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
             | rename note AS Notes
             | sort - hits | head 20
           </query>

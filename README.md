@@ -41,6 +41,7 @@ Summary index model (important)
     - `30_dns_match_opencti` (aggregates unique domains before lookup for efficiency)
     - `31_ip_match_opencti`
     - `32_dns_answer_ip_match_opencti`
+    - `35_email_match_opencti` (aggregate → lookup → filter for emails; per‑combo write)
   - Backfills (ad‑hoc or scheduled off):
     - `90_backfill_dns_match_opencti`
     - `91_backfill_ip_match_opencti`
@@ -53,6 +54,16 @@ Summary index model (important)
 - “Seen again” logic on the Analyst dashboard
   - The dashboard looks up analyst decisions from `opencti_seenbefore_kv` (via `opencti_seenbefore_kv` lookup), then evaluates `seen_again` as Yes/No based on whether a new `last_seen` is later than `decided_at`.
   - Workflow actions let analysts set `ioc_rating` (malicious/benign/unreviewed), `decided_at`, `decided_by`, and `note` by writing/upserting into `opencti_seenbefore_kv`.
+
+### Per‑combo grouping + multi‑source provenance (Created By)
+- Group‑by keys (what defines a single row):
+  - Emails: `email + ioc + score + role`
+  - Domains: `domain + ioc + score`
+  - URLs: `url_candidate + ioc + score`
+  - IPs: `ip + ioc + score`
+  - Files: `hash + ioc + score`
+- Provenance display: we keep one row per combo and collect all producers with `values(created_by)`, then render as a comma‑separated string via `mvjoin(created_by, ", ")`.
+- Result: analysts see a compact list with all sources that asserted the IOC for that combo within the time window. If you prefer one row per producer, add `created_by` to the group‑by list instead.
 
 ## How To Use
 - Dashboards
