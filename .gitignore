@@ -28,4 +28,5 @@ node_modules/
 
 # generated/runtime lookup caches
 lookups/*_cache.csv
+lookups/opencti_threatfeed_history.csv
 lookups/generated/**

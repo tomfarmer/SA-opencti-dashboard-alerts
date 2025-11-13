@@ -53,7 +53,7 @@
         <title>Flagged Domains</title>
         <search>
           <query>
-            index=opencti_alerts sourcetype=opencti:dns_match earliest=$time.earliest$ latest=$time.latest$
+            index=opencti_alerts sourcetype=opencti:domain_match earliest=$time.earliest$ latest=$time.latest$
             | eval domain=coalesce(match_value, fqdn, domain, ioc)
             | where isnotnull(domain) AND domain!=""
             | stats latest(last_seen) as ls by domain
@@ -153,18 +153,27 @@
         <title>Domain Matches</title>
         <search>
           <query>
-            index=opencti_alerts sourcetype=opencti:dns_match earliest=$time.earliest$ latest=$time.latest$
+            index=opencti_alerts sourcetype=opencti:domain_match earliest=$time.earliest$ latest=$time.latest$
             | eval domain=coalesce(match_value, fqdn, domain, ioc)
             | where isnotnull(domain) AND domain!=""
             | eval hits=if(isnum(hits), hits, 1)
-            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by max(confidence) as confidence by domain ioc score
+            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(threat_feed_at_match_time) as threat_feed_at_match_time values(created_by) as created_by max(confidence) as confidence by domain ioc
             | eval indicator=domain, type="domain", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
             | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
             | eval Rating=coalesce(ioc_rating, "Unreviewed")
             | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
-            | eval created_by=mvjoin(created_by, ", ")
-            | rename domain AS Domain score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
-            | table Rating Domain "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | eval threat_feed_at_match_time=coalesce(threat_feed_at_match_time, created_by)
+            | lookup opencti_threatfeed_current_domain ioc OUTPUT threat_feed_current feed_scores max_score min_score score_range
+            | eval "Threat Feed At Match Time"=mvjoin(threat_feed_at_match_time, ", "), "Threat Feed Current"=mvjoin(threat_feed_current, ", ")
+            | mvexpand feed_scores
+            | eval _feed=mvindex(split(feed_scores, ":"), 0), _fscore=tonumber(mvindex(split(feed_scores, ":"), 1))
+            | eventstats max(_fscore) as _mx min(_fscore) as _mn by ioc
+            | eval _max_by=if(_fscore=_mx, _feed, null()), _min_by=if(_fscore=_mn, _feed, null())
+| stats max(hits) as hits min(first_seen) as first_seen max(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels max(confidence) as confidence values(Rating) as Rating values(note) as note values("Threat Feed At Match Time") as "Threat Feed At Match Time" values("Threat Feed Current") as "Threat Feed Current" max(_mx) as max_score min(_mn) as low_score values(_max_by) as "Max Score By" values(_min_by) as "Low Score By" by domain ioc
+| eval "Low Score"=low_score, "Max Score"=max_score, "Score Range"=low_score . "–" . max_score
+            | eval "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | rename domain AS Domain labels AS Tags confidence AS Confidence hits AS "Times Seen" src_index AS Index
+| table Rating Domain "Times Seen" Tags "Low Score" "Low Score By" "Max Score" "Max Score By" "Score Range" "Threat Feed At Match Time" "Threat Feed Current" Confidence note "First Time Seen" "Last Time Seen" Index
             | rename note AS Notes
             | sort - hits | head 20
           </query>
@@ -221,14 +230,23 @@
           <query>
             index=opencti_alerts sourcetype=opencti:ip_match earliest=$time.earliest$ latest=$time.latest$
             | eval hits=if(isnum(hits), hits, 1)
-            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by max(confidence) as confidence by ip ioc score
+            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(threat_feed_at_match_time) as threat_feed_at_match_time values(created_by) as created_by max(confidence) as confidence by ip ioc
             | eval indicator=ip, type="ip", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
             | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
             | eval Rating=coalesce(ioc_rating, "Unreviewed")
             | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
-            | eval created_by=mvjoin(created_by, ", ")
-            | rename ip AS IP score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
-            | table Rating IP "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | eval threat_feed_at_match_time=coalesce(threat_feed_at_match_time, created_by)
+            | lookup opencti_threatfeed_current_ip ioc OUTPUT threat_feed_current feed_scores max_score min_score score_range
+            | eval "Threat Feed At Match Time"=mvjoin(threat_feed_at_match_time, ", "), "Threat Feed Current"=mvjoin(threat_feed_current, ", ")
+            | mvexpand feed_scores
+            | eval _feed=mvindex(split(feed_scores, ":"), 0), _fscore=tonumber(mvindex(split(feed_scores, ":"), 1))
+            | eventstats max(_fscore) as _mx min(_fscore) as _mn by ioc
+            | eval _max_by=if(_fscore=_mx, _feed, null()), _min_by=if(_fscore=_mn, _feed, null())
+| stats max(hits) as hits min(first_seen) as first_seen max(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels max(confidence) as confidence values(Rating) as Rating values(note) as note values("Threat Feed At Match Time") as "Threat Feed At Match Time" values("Threat Feed Current") as "Threat Feed Current" max(_mx) as max_score min(_mn) as low_score values(_max_by) as "Max Score By" values(_min_by) as "Low Score By" by ip ioc
+| eval "Low Score"=low_score, "Max Score"=max_score, "Score Range"=low_score . "–" . max_score
+            | eval "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | rename ip AS IP labels AS Tags confidence AS Confidence hits AS "Times Seen" src_index AS Index
+| table Rating IP "Times Seen" Tags "Low Score" "Low Score By" "Max Score" "Max Score By" "Score Range" "Threat Feed At Match Time" "Threat Feed Current" Confidence note "First Time Seen" "Last Time Seen" Index
             | rename note AS Notes
             | sort - hits | head 20
           </query>
@@ -256,14 +274,23 @@
           <query>
             index=opencti_alerts sourcetype=opencti:url_match earliest=$time.earliest$ latest=$time.latest$
             | eval hits=if(isnum(hits), hits, 1)
-            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by max(confidence) as confidence by url_candidate ioc score
+            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(threat_feed_at_match_time) as threat_feed_at_match_time values(created_by) as created_by max(confidence) as confidence by url_candidate ioc
             | eval indicator=url_candidate, type="url", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
             | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
             | eval Rating=coalesce(ioc_rating, "Unreviewed")
             | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
-            | eval created_by=mvjoin(created_by, ", ")
-            | rename url_candidate AS URL score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
-            | table Rating URL "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | eval threat_feed_at_match_time=coalesce(threat_feed_at_match_time, created_by)
+            | lookup opencti_threatfeed_current_url ioc OUTPUT threat_feed_current feed_scores max_score min_score score_range
+            | eval "Threat Feed At Match Time"=mvjoin(threat_feed_at_match_time, ", "), "Threat Feed Current"=mvjoin(threat_feed_current, ", ")
+            | mvexpand feed_scores
+            | eval _feed=mvindex(split(feed_scores, ":"), 0), _fscore=tonumber(mvindex(split(feed_scores, ":"), 1))
+            | eventstats max(_fscore) as _mx min(_fscore) as _mn by ioc
+            | eval _max_by=if(_fscore=_mx, _feed, null()), _min_by=if(_fscore=_mn, _feed, null())
+| stats max(hits) as hits min(first_seen) as first_seen max(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels max(confidence) as confidence values(Rating) as Rating values(note) as note values("Threat Feed At Match Time") as "Threat Feed At Match Time" values("Threat Feed Current") as "Threat Feed Current" max(_mx) as max_score min(_mn) as low_score values(_max_by) as "Max Score By" values(_min_by) as "Low Score By" by url_candidate ioc
+| eval "Low Score"=low_score, "Max Score"=max_score, "Score Range"=low_score . "–" . max_score
+            | eval "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | rename url_candidate AS URL labels AS Tags confidence AS Confidence hits AS "Times Seen" src_index AS Index
+| table Rating URL "Times Seen" Tags "Low Score" "Low Score By" "Max Score" "Max Score By" "Score Range" "Threat Feed At Match Time" "Threat Feed Current" Confidence note "First Time Seen" "Last Time Seen" Index
             | rename note AS Notes
             | sort - hits | head 20
           </query>
@@ -288,7 +315,7 @@
       <table>
         <title>Email Matches</title>
         <search>
-          <query>index=opencti_alerts sourcetype=opencti:email_match earliest=$time.earliest$ latest=$time.latest$ | eval email=lower(email) | eval hits=if(isnum(hits), hits, 1) | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by latest(confidence) as confidence by email ioc score role | eval indicator=email, type="email", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S") | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note | eval Rating=coalesce(ioc_rating, "Unreviewed") | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No") | eval created_by=mvjoin(created_by, ", ") | rename email AS Email score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index role AS Role | table Rating Email "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index Role | rename note AS Notes | sort - hits | head 20</query>
+          <query>index=opencti_alerts sourcetype=opencti:email_match earliest=$time.earliest$ latest=$time.latest$ | eval email=lower(email) | eval hits=if(isnum(hits), hits, 1) | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(threat_feed_at_match_time) as threat_feed_at_match_time values(created_by) as created_by latest(confidence) as confidence by email ioc role | eval indicator=email, type="email" | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note | eval Rating=coalesce(ioc_rating, "Unreviewed") | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No") | eval threat_feed_at_match_time=coalesce(threat_feed_at_match_time, created_by) | lookup opencti_threatfeed_current_email ioc OUTPUT threat_feed_current feed_scores max_score min_score score_range | eval "Threat Feed At Match Time"=mvjoin(threat_feed_at_match_time, ", "), "Threat Feed Current"=mvjoin(threat_feed_current, ", ") | mvexpand feed_scores | eval _feed=mvindex(split(feed_scores, ":"), 0), _fscore=tonumber(mvindex(split(feed_scores, ":"), 1)) | eventstats max(_fscore) as _mx min(_fscore) as _mn by ioc | eval _max_by=if(_fscore=_mx, _feed, null()), _min_by=if(_fscore=_mn, _feed, null()) | stats max(hits) as hits min(first_seen) as first_seen max(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels latest(confidence) as confidence values(Rating) as Rating values(note) as note values("Threat Feed At Match Time") as "Threat Feed At Match Time" values("Threat Feed Current") as "Threat Feed Current" max(_mx) as max_score min(_mn) as low_score values(_max_by) as "Max Score By" values(_min_by) as "Low Score By" by email ioc role | eval "Low Score"=low_score, "Max Score"=max_score, "Score Range"=low_score . "–" . max_score | eval "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S") | rename email AS Email labels AS Tags confidence AS Confidence hits AS "Times Seen" src_index AS Index role AS Role | table Rating Email "Times Seen" Tags "Low Score" "Low Score By" "Max Score" "Max Score By" "Score Range" "Threat Feed At Match Time" "Threat Feed Current" Confidence note "First Time Seen" "Last Time Seen" Index Role | rename note AS Notes | sort - hits | head 20</query>
         </search>
         <option name="count">15</option>
         <drilldown>
@@ -314,14 +341,23 @@
           <query>
             index=opencti_alerts sourcetype=opencti:file_hash_match earliest=$time.earliest$ latest=$time.latest$
             | eval hits=if(isnum(hits), hits, 1)
-            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(created_by) as created_by max(confidence) as confidence by hash ioc score
+            | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels values(threat_feed_at_match_time) as threat_feed_at_match_time values(created_by) as created_by max(confidence) as confidence by hash ioc
             | eval indicator=hash, type="file", "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
             | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating decided_at decided_by note
             | eval Rating=coalesce(ioc_rating, "Unreviewed")
             | eval seen_again=if(isnotnull(decided_at) AND last_seen>decided_at, "Yes","No")
-            | eval created_by=mvjoin(created_by, ", ")
-            | rename hash AS Hash score AS Score labels AS Tags created_by AS "Created By" confidence AS Confidence hits AS "Times Seen" src_index AS Index
-            | table Rating Hash "Times Seen" Tags Score "Created By" Confidence note "First Time Seen" "Last Time Seen" Index
+            | eval threat_feed_at_match_time=coalesce(threat_feed_at_match_time, created_by)
+            | lookup opencti_threatfeed_current_hash ioc OUTPUT threat_feed_current feed_scores max_score min_score score_range
+            | eval "Threat Feed At Match Time"=mvjoin(threat_feed_at_match_time, ", "), "Threat Feed Current"=mvjoin(threat_feed_current, ", ")
+            | mvexpand feed_scores
+            | eval _feed=mvindex(split(feed_scores, ":"), 0), _fscore=tonumber(mvindex(split(feed_scores, ":"), 1))
+            | eventstats max(_fscore) as _mx min(_fscore) as _mn by ioc
+            | eval _max_by=if(_fscore=_mx, _feed, null()), _min_by=if(_fscore=_mn, _feed, null())
+| stats max(hits) as hits min(first_seen) as first_seen max(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels max(confidence) as confidence values(Rating) as Rating values(note) as note values("Threat Feed At Match Time") as "Threat Feed At Match Time" values("Threat Feed Current") as "Threat Feed Current" max(_mx) as max_score min(_mn) as low_score values(_max_by) as "Max Score By" values(_min_by) as "Low Score By" by hash ioc
+| eval "Low Score"=low_score, "Max Score"=max_score, "Score Range"=low_score . "–" . max_score
+            | eval "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | rename hash AS Hash labels AS Tags confidence AS Confidence hits AS "Times Seen" src_index AS Index
+| table Rating Hash "Times Seen" Tags "Low Score" "Low Score By" "Max Score" "Max Score By" "Score Range" "Threat Feed At Match Time" "Threat Feed Current" Confidence note "First Time Seen" "Last Time Seen" Index
             | rename note AS Notes
             | sort - hits | head 20
           </query>

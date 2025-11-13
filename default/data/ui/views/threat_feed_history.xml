@@ -1,0 +1,96 @@
+<dashboard version="1.1" theme="dark">
+  <label>Threatfeed History</label>
+  <description>Timeline of which threatfeeds asserted each IOC (first/last seen per threatfeed), with filtering by IOC, type, and threatfeed.</description>
+
+  <fieldset submitButton="true">
+    <input type="text" token="ioc_filter">
+      <label>IOC contains</label>
+      <default></default>
+    </input>
+    <input type="dropdown" token="type_filter" searchWhenChanged="false">
+      <label>IOC type</label>
+      <choice value="">All</choice>
+      <choice value="domain">Domain</choice>
+      <choice value="ip">IP</choice>
+      <choice value="url">URL</choice>
+      <choice value="hash">Hash</choice>
+      <choice value="email">Email</choice>
+      <default></default>
+    </input>
+    <input type="multiselect" token="threatfeed_filter" searchWhenChanged="false">
+      <label>Threatfeed</label>
+      <delimiter>,</delimiter>
+      <choice value="">All</choice>
+      <populatingSearch fieldForLabel="threatfeed" fieldForValue="threatfeed">| inputlookup opencti_threatfeed_history | stats count by threatfeed | sort threatfeed</populatingSearch>
+      <default></default>
+    </input>
+  </fieldset>
+
+  <row>
+    <panel>
+      <single>
+        <title>Total IOCs (with threatfeed history)</title>
+        <search>
+          <query>| inputlookup opencti_threatfeed_history
+| where (isnull($type_filter$) OR $type_filter$="" OR type=$type_filter$)
+| where (isnull($ioc_filter$) OR $ioc_filter$="" OR like(ioc, "%$ioc_filter$%"))
+| where (isnull($threatfeed_filter$) OR $threatfeed_filter$="" OR mvfind(split("$threatfeed_filter$", ","), threatfeed)&gt;=0)
+| stats dc(ioc) as IOCs</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Distinct Threatfeeds</title>
+        <search>
+          <query>| inputlookup opencti_threatfeed_history
+| where (isnull($type_filter$) OR $type_filter$="" OR type=$type_filter$)
+| where (isnull($ioc_filter$) OR $ioc_filter$="" OR like(ioc, "%$ioc_filter$%"))
+| where (isnull($threatfeed_filter$) OR $threatfeed_filter$="" OR mvfind(split("$threatfeed_filter$", ","), threatfeed)&gt;=0)
+| stats dc(threatfeed) as Threatfeeds</query>
+        </search>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>New IOC flags per day (by threatfeed)</title>
+        <search>
+          <query>| inputlookup opencti_threatfeed_history
+| where (isnull($type_filter$) OR $type_filter$="" OR type=$type_filter$)
+| where (isnull($ioc_filter$) OR $ioc_filter$="" OR like(ioc, "%$ioc_filter$%"))
+| where (isnull($threatfeed_filter$) OR $threatfeed_filter$="" OR mvfind(split("$threatfeed_filter$", ","), threatfeed)&gt;=0)
+| eval first_epoch=if(isnum(first_seen_threatfeed), first_seen_threatfeed, strptime(first_seen_threatfeed, "%Y-%m-%dT%H:%M:%S.%3N%z"))
+| eval _time=coalesce(first_epoch, now())
+| bin _time span=1d
+| stats count by _time threatfeed</query>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Threatfeed assertions per IOC</title>
+        <search>
+          <query>| inputlookup opencti_threatfeed_history
+| where (isnull($type_filter$) OR $type_filter$="" OR type=$type_filter$)
+| where (isnull($ioc_filter$) OR $ioc_filter$="" OR like(ioc, "%$ioc_filter$%"))
+| where (isnull($threatfeed_filter$) OR $threatfeed_filter$="" OR mvfind(split("$threatfeed_filter$", ","), threatfeed)&gt;=0)
+| eval first_epoch=if(isnum(first_seen_threatfeed), first_seen_threatfeed, strptime(first_seen_threatfeed, "%Y-%m-%dT%H:%M:%S.%3N%z"))
+| eval last_epoch=if(isnum(last_seen_threatfeed), last_seen_threatfeed, strptime(last_seen_threatfeed, "%Y-%m-%dT%H:%M:%S.%3N%z"))
+| eval "First Seen (Threatfeed)"=if(isnull(first_epoch), "", strftime(first_epoch, "%d %b %Y %H:%M:%S"))
+| eval "Last Seen (Threatfeed)"=if(isnull(last_epoch), "", strftime(last_epoch, "%d %b %Y %H:%M:%S"))
+| rename last_score as "Last Score", last_confidence as "Last Confidence"
+| table ioc type threatfeed "First Seen (Threatfeed)" "Last Seen (Threatfeed)" "Last Score" "Last Confidence"</query>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>

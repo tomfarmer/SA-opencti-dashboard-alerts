@@ -1,6 +1,7 @@
 <nav>
   <view name="opencti_overview" label="Analyst OpenCTI Threat Match Overview"/>
   <view name="opencti_health" label="OpenCTI Threat Match Health"/>
+  <view name="threat_feed_history" label="Threat Feed History"/>
   <view name="readme" label="README"/>
   <view name="search" />
 </nav>

@@ -16,7 +16,7 @@
       <single>
         <title>Domain IOC count (KV)</title>
         <search>
-          <query>| inputlookup sa_opencti_domain_kv | stats count</query>
+          <query>| inputlookup opencti_lookup_domain | stats count</query>
         </search>
       </single>
     </panel>
@@ -24,7 +24,7 @@
       <single>
         <title>IP IOC count (KV)</title>
         <search>
-          <query>| inputlookup sa_opencti_ip_kv | stats count</query>
+          <query>| inputlookup opencti_lookup_ip | stats count</query>
         </search>
       </single>
     </panel>
