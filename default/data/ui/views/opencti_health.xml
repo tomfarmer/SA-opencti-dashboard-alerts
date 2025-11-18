@@ -89,4 +89,39 @@
       </table>
     </panel>
   </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>TM correlations by IOC type</title>
+        <search>
+          <query>
+            | inputlookup opencti_tm_monitored_indexs_and_fields
+            | eval enabled=coalesce(enabled,0)
+            | stats count AS total, sum(enabled) AS enabled BY ioc_type
+            | eval disabled=total-enabled
+            | sort ioc_type
+          </query>
+        </search>
+        <option name="count">10</option>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>TM index usage (enabled correlations)</title>
+        <search>
+          <query>
+            | inputlookup opencti_tm_monitored_indexs_and_fields
+            | where enabled=1
+            | eval idx=split(indexes,",")
+            | mvexpand idx
+            | rename idx AS index
+            | stats count AS enabled_correlations BY ioc_type index
+            | sort - enabled_correlations
+          </query>
+        </search>
+        <option name="count">20</option>
+      </table>
+    </panel>
+  </row>
 </dashboard>

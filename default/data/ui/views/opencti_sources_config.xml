@@ -1,0 +1,147 @@
+<dashboard
+  version="1.1"
+  theme="dark"
+  script="js/opencti_correlations_dashboard.js"
+>
+  <label>Correlations</label>
+  <description>Configure basic OpenCTI correlations for URL, Hash, Domain, IP, and Email indicators.</description>
+
+  <row id="docButtonRow">
+    <html>
+      <button id="openctiDocButton" class="btn btn-primary">Documentation</button>
+    </html>
+  </row>
+
+  <row>
+    <html>
+      <head>
+        <style>
+          .tab {
+            display: none;
+          }
+          .tab.active {
+            display: block;
+          }
+          .opencti-correlations-container {
+            margin-top: 10px;
+          }
+          .opencti-correlations-container .button-row {
+            margin-top: 10px;
+            margin-bottom: 10px;
+          }
+          .opencti-correlations-container .button-row .btn {
+            margin-left: 0;
+          }
+          .opencti-correlations-table th,
+          .opencti-correlations-table td {
+            vertical-align: middle;
+          }
+          .opencti-correlations-table .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+          }
+          .opencti-correlations-table .switch input {
+            display: none;
+          }
+          .opencti-correlations-table .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #888;
+            transition: .4s;
+          }
+          .opencti-correlations-table .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+          }
+          .opencti-correlations-table input:checked + .slider {
+            background-color: #5cb85c;
+          }
+          .opencti-correlations-table input:checked + .slider:before {
+            transform: translateX(18px);
+          }
+          .opencti-correlations-table .slider.round {
+            border-radius: 20px;
+          }
+          .opencti-correlations-table .slider.round:before {
+            border-radius: 50%;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container-fluid opencti-correlations-container">
+          <ul class="nav nav-tabs">
+            <li class="active"><a data-toggle="tab" href="#opencti_correlations_basic">Basic</a></li>
+            <li><a data-toggle="tab" href="#opencti_correlations_regex">Regex Correlation</a></li>
+          </ul>
+
+          <div class="tab-content">
+            <div id="opencti_correlations_basic" class="tab active">
+              <div class="row button-row">
+                <button class="btn btn-primary" id="addOpenCtiBasicCorrelation">Add Basic Correlation</button>
+              </div>
+              <div class="row">
+                <div class="col-md-12">
+                  <table class="table table-hover table-striped opencti-correlations-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Enable</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Index List</th>
+                        <th scope="col">Field List</th>
+                        <th scope="col">Last run</th>
+                        <th scope="col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody class="js-opencti-correlations-table-basic">
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div id="opencti_correlations_regex" class="tab">
+              <div class="row button-row">
+                <button class="btn btn-primary" id="addOpenCtiRegexCorrelation">Add Regex Correlation</button>
+              </div>
+              <div class="row">
+                <div class="col-md-12">
+                  <table class="table table-hover table-striped opencti-correlations-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Enable</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">IOC Type</th>
+                        <th scope="col">Index List</th>
+                        <th scope="col">Field List</th>
+                        <th scope="col">Regex Pattern</th>
+                        <th scope="col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody class="js-opencti-correlations-table-regex">
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  </row>
+</dashboard>

@@ -2,12 +2,12 @@
   <label>Threatfeed History</label>
   <description>Timeline of which threatfeeds asserted each IOC (first/last seen per threatfeed), with filtering by IOC, type, and threatfeed.</description>
 
-  <fieldset submitButton="true">
-    <input type="text" token="ioc_filter">
+  <fieldset submitButton="false">
+    <input type="text" token="ioc_filter" searchWhenChanged="true">
       <label>IOC contains</label>
       <default></default>
     </input>
-    <input type="dropdown" token="type_filter" searchWhenChanged="false">
+    <input type="dropdown" token="type_filter" searchWhenChanged="true">
       <label>IOC type</label>
       <choice value="">All</choice>
       <choice value="domain">Domain</choice>
@@ -17,7 +17,7 @@
       <choice value="email">Email</choice>
       <default></default>
     </input>
-    <input type="multiselect" token="threatfeed_filter" searchWhenChanged="false">
+    <input type="multiselect" token="threatfeed_filter" searchWhenChanged="true">
       <label>Threatfeed</label>
       <delimiter>,</delimiter>
       <choice value="">All</choice>

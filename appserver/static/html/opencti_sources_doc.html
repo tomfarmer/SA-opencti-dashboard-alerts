@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>OpenCTI Correlations Configuration</title>
+  </head>
+  <body>
+    <h1>OpenCTI Correlations Configuration</h1>
+
+    <p>
+      This page lets you define basic OpenCTI correlations for URL, Hash, Domain, IP, and Email indicators. Each row
+      describes one correlation: an IOC type, a set of indexes to monitor, and the fields in those indexes that contain
+      candidate values. The OpenCTI threat-match engine reads these definitions and runs its saved searches every
+      five minutes over the last five minutes of indexed data, writing normalized matches into the
+      <code>opencti_alerts</code> summary index.
+    </p>
+
+    <h2>How it works</h2>
+    <ul>
+      <li>The table lists existing correlations with columns for Enable, Name, Description, Index List, Field List, Last run, and Actions.</li>
+      <li>Each row represents one correlation configuration for a given IOC type (URL, Hash, Domain, IP, or Email).</li>
+      <li>The Enable toggle marks a correlation as active; the engine will only honor enabled rows.</li>
+      <li>The Index List and Field List values are stored in a KV collection and are used by macros to build the SPL query.</li>
+      <li>The Last run column is informational; the underlying threat-match saved searches are scheduled to run every five minutes over the last five minutes of indexed data.</li>
+    </ul>
+
+    <h2>Creating and editing correlations</h2>
+    <ul>
+      <li>Click <strong>Add Basic Correlation</strong> to open the modal form.</li>
+      <li>Provide a unique <strong>Name</strong> and optional <strong>Description</strong>.</li>
+      <li>Select an <strong>IOC Type</strong> (URL, Hash, Domain, IP, or Email).</li>
+      <li>Enter a comma-separated <strong>List of Fields</strong> that contain the indicator values in your events (no spaces between commas).</li>
+      <li>Enter a comma-separated <strong>List of Indexes</strong> to search (no wildcards like <code>index=*</code>, no spaces between commas).</li>
+      <li>Click <strong>Create</strong> to save; the correlation appears in the table and will be honored by the threat-match saved searches.</li>
+      <li>Use the row <strong>Edit</strong> action to reopen the modal with existing values and update fields/indexes as needed.</li>
+    </ul>
+
+    <h2>Best practices</h2>
+    <ul>
+      <li>Think in terms of “one correlation per index per IOC family” where possible.</li>
+      <li>Use indexes that contain normalized, high-signal telemetry; noisy or duplicate sources will inflate hit counts.</li>
+      <li>After changing source indexes, allow a couple of matcher runs to populate the <code>opencti_alerts</code> summary index.</li>
+      <li>Avoid scanning the same heavy index multiple times with slightly different SPL every five minutes; rescanning is what costs the most.</li>
+    </ul>
+
+    <h3>Good vs bad patterns</h3>
+    <p>
+      The goal is to minimize how often the same index is scanned by the 5-minute threat-match searches. It is better
+      to have one correlation that covers all relevant fields in an index than several correlations that all hit the
+      same index with small variations.
+    </p>
+
+    <h4>Bad (too many passes over the same index)</h4>
+    <pre>
+ip – Zeek conn (src)          → index=zeek_conn fields=id.orig_h
+ip – Zeek conn (dst)          → index=zeek_conn fields=id.resp_h
+ip – Zeek conn (internal)     → index=zeek_conn fields=id.orig_h,id.resp_h with some internal filter
+ip – Zeek uncommon ports      → index=zeek_conn with different SPL filters
+
+Now 4 out of 4 correlations all hit the same heavy index: zeek_conn.
+    </pre>
+
+    <h4>Good (each index has its own correlation)</h4>
+    <p><strong>Domains</strong></p>
+    <pre>
+domain – Zeek DNS             → index=zeek_dns fields=query
+domain – Proxy / Web filter   → index=proxy_logs fields=host,domain
+    </pre>
+
+    <p><strong>IPs</strong></p>
+    <pre>
+ip – Zeek conn                → index=zeek_conn fields=id.orig_h,id.resp_h
+ip – Firewall perimeter       → index=firewall_main fields=src_ip,dst_ip
+ip – EDR network telemetry    → index=edr fields=remote_ip
+ip – Velociraptor artifacts   → index=velociraptor fields=dest_ip
+    </pre>
+
+    <p><strong>Hashes</strong> (useful for your image pipeline)</p>
+    <pre>
+hash – AV scan results        → index=image_pipeline_av fields=file_hash,sha256,md5
+hash – YARA hits              → index=image_pipeline_yara fields=hash,sha256
+hash – Velociraptor hashes    → index=velociraptor fields=hash
+hash – EDR collected binaries → index=edr fields=file_hash
+    </pre>
+
+    <p><strong>URLs</strong></p>
+    <pre>
+url – Zeek HTTP               → index=zeek_http fields=uri,host
+url – Proxy logs              → index=proxy_logs fields=url
+url – Image pipeline scraping → index=image_pipeline_strings fields=extracted_url
+    </pre>
+
+    <p><strong>Emails</strong></p>
+    <pre>
+email – SMTP logs             → index=smtp_logs fields=sender,recipient
+email – O365 message trace    → index=o365_email fields=sender_address,recipient_address
+    </pre>
+
+    <h2>Email section</h2>
+    <p>
+      For Email correlations, choose indexes that contain SMTP-style events and specify fields that carry sender/recipient
+      addresses (for example <code>from</code>, <code>to</code>, <code>mailfrom</code>, <code>rcptto</code>). The correlation
+      logic normalizes and validates these fields before matching against the OpenCTI email IOC lookups.
+    </p>
+
+    <h2>Troubleshooting</h2>
+    <ul>
+      <li>If you see errors when creating or editing a correlation, ensure your Splunk role can read and write KV store data for this app.</li>
+      <li>If threat-match dashboards show no hits, confirm that your source indexes and fields actually contain the expected indicators for the time window.</li>
+      <li>If you suspect performance issues, look for correlations that repeatedly scan the same heavy index and consolidate them where possible.</li>
+    </ul>
+  </body>
+</html>

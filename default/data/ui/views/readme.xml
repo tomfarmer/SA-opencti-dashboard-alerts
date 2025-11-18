@@ -52,9 +52,13 @@ A Splunk app that enriches your network telemetry with OpenCTI indicators of com
   - Backfills re‑scan historical telemetry against the current IOC sets, capturing matches for indicators added or changed after events were first ingested.
   - Summary `_time` is set to `last_seen` so dashboards reflect the true event chronology; to validate fresh writes, search by `_indextime`.
 
-- “Seen again” logic on the Analyst dashboard
+- “Seen again” + “Cleared” logic on the Analyst dashboard
   - The dashboard looks up analyst decisions from `opencti_seenbefore_kv` (via `opencti_seenbefore_kv` lookup), then evaluates `seen_again` as Yes/No based on whether a new `last_seen` is later than `decided_at`.
-  - Workflow actions let analysts set `ioc_rating` (malicious/benign/unreviewed), `decided_at`, `decided_by`, and `note` by writing/upserting into `opencti_seenbefore_kv`.
+  - Workflow actions let analysts set `ioc_rating` (malicious/benign/unreviewed), a separate `cleared` flag (0/1), `decided_at`, `decided_by`, and `note` by writing/upserting into `opencti_seenbefore_kv`.
+  - Semantics:
+    - `ioc_rating` = classification of the IOC (malicious/benign/unreviewed).
+    - `cleared=1` = this IOC’s matches have been reviewed and handled (case closed), even if the IOC remains malicious.
+    - `cleared=0` (or null) = not yet cleared; still open from an operational point of view.
 
 ## How To Use
 - Dashboards
@@ -84,7 +88,7 @@ A Splunk app that enriches your network telemetry with OpenCTI indicators of com
   - `opencti_lookup_domain` → `opencti_domains_kv` (WILDCARD(domain)) includes: domain, score, labels, created_by, confidence.
   - `opencti_lookup_ip` → `opencti_ips_kv` (CIDR(ip)) includes: ip, score, labels, created_by, confidence.
   - Threat‑feed union lookups (`opencti_threatfeed_current_*`) also expose `feed_scores` (MV of `feed:score`), `max_score`, `min_score` (rendered as “Low Score” in the dashboard), and `score_range`.
-  - Analyst decisions: `opencti_seenbefore_kv` (fields: _key, indicator, type, ioc_rating, decided_at, decided_by, note).
+  - Analyst decisions: `opencti_seenbefore_kv` (fields: _key, indicator, type, ioc_rating, cleared, decided_at, decided_by, note).
 
 ## Wildcards and matching
   - Domains

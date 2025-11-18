@@ -72,9 +72,16 @@ Summary index model (important)
   - Backfills re‑scan historical telemetry against the current IOC sets, capturing matches for indicators added or changed after events were first ingested.
   - Summary `_time` is set to `last_seen` so dashboards reflect the true event chronology; to validate fresh writes, search by `_indextime`.
 
-- “Seen again” logic on the Analyst dashboard
+- “Seen again” + “Cleared” logic on the Analyst dashboard
   - The dashboard looks up analyst decisions from `opencti_seenbefore_kv` (via `opencti_seenbefore_kv` lookup), then evaluates `seen_again` as Yes/No based on whether a new `last_seen` is later than `decided_at`.
-  - Workflow actions let analysts set `ioc_rating` (malicious/benign/unreviewed), `decided_at`, `decided_by`, and `note` by writing/upserting into `opencti_seenbefore_kv`.
+  - Workflow actions let analysts set:
+    - `ioc_rating` (malicious/benign/unreviewed) – how we classify the IOC itself.
+    - `cleared` (0/1) – whether matches for this IOC have been reviewed and handled.
+    - `decided_at`, `decided_by`, and `note`.
+  - Semantics:
+    - `ioc_rating="malicious"` and `cleared=0` → malicious IOC with open work.
+    - `ioc_rating="malicious"` and `cleared=1` → malicious IOC that has been reviewed and cleared from an operational point of view.
+    - `ioc_rating="benign"` and `cleared=1` → benign / accepted‑risk IOC that has been reviewed.
 
 ### Per‑combo grouping + multi‑source provenance (Created By)
 - Group‑by keys (what defines a single row):
@@ -118,6 +125,11 @@ Summary index model (important)
   - Get which producer set the max/min for each IOC:
     - `... | mvexpand feed_scores | eval f=mvindex(split(feed_scores,":"),0), s=tonumber(mvindex(split(feed_scores,":"),1)) | eventstats max(s) as mx min(s) as mn by ioc | eval max_by=if(s=mx,f,null()), min_by=if(s=mn,f,null()) | stats values(max_by) as max_score_by values(min_by) as min_score_by by ioc`
 
+## Naming Key (abbreviations)
+- `m_…`  = macro (reusable SPL pipeline snippet; expands inline in saved searches).
+- `otm`  = OpenCTI Threat Match (this app and its matchers).
+- `tm`   = Threat Match (generic term for the IOC‑matching pipeline and correlations).
+
 ## How To Use
 - Dashboards
   - Analyst OpenCTI Threat Match Overview (`default/data/ui/views/opencti_overview.xml`)
@@ -145,7 +157,7 @@ Summary index model (important)
 - Lookups & transforms
   - `opencti_lookup_domain` → `opencti_domains_kv` (WILDCARD(domain)) includes: domain, score, labels, created_by, confidence.
   - `opencti_lookup_ip` → `opencti_ips_kv` (CIDR(ip)) includes: ip, score, labels, created_by, confidence.
-  - Analyst decisions: `opencti_seenbefore_kv` (fields: _key, indicator, type, ioc_rating, decided_at, decided_by, note).
+  - Analyst decisions: `opencti_seenbefore_kv` (fields: _key, indicator, type, ioc_rating, cleared, decided_at, decided_by, note).
 
 - Wildcards and matching
   - Domains

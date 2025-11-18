@@ -1,0 +1,190 @@
+<dashboard version="1.1" theme="dark">
+  <label>Leadership Overview</label>
+  <description>High-level view of IOC matches, review coverage, and decision throughput for OpenCTI Threat Match.</description>
+
+  <fieldset submitButton="false">
+    <input type="time" token="time">
+      <label>Time range</label>
+      <default>
+        <earliest>-30d@d</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+    <input type="dropdown" token="type_filter" searchWhenChanged="true">
+      <label>IOC type</label>
+      <choice value="">All</choice>
+      <choice value="domain">Domain</choice>
+      <choice value="ip">IP</choice>
+      <choice value="url">URL</choice>
+      <choice value="hash">Hash</choice>
+      <choice value="email">Email</choice>
+      <default></default>
+    </input>
+    <input type="text" token="bu_filter" searchWhenChanged="true">
+      <label>IOC tags contain</label>
+      <default></default>
+    </input>
+  </fieldset>
+
+  <search id="base_ioc_summary">
+    <query>
+      index=opencti_alerts sourcetype=opencti:* earliest=$time.earliest$ latest=$time.latest$
+      | eval type=case(
+          sourcetype="opencti:domain_match" OR sourcetype="opencti:domain_match_backfill","domain",
+          sourcetype="opencti:ip_match" OR sourcetype="opencti:domain_answer_ip_match_backfill" OR sourcetype="opencti:domain_answer_ip_match","ip",
+          sourcetype="opencti:url_match" OR sourcetype="opencti:url_match_backfill","url",
+          sourcetype="opencti:file_hash_match" OR sourcetype="opencti:file_hash_match_backfill","hash",
+          sourcetype="opencti:email_match" OR sourcetype="opencti:email_match_backfill","email",
+          1=1,"other")
+      | eval indicator=case(
+          type="domain", coalesce(match_value, fqdn, domain, ioc),
+          type="ip", ip,
+          type="url", coalesce(url_candidate, url, ioc),
+          type="hash", hash,
+          type="email", email,
+          1=1, ioc)
+      | where isnotnull(indicator) AND indicator!=""
+      | eval hits=if(isnum(hits), hits, 1)
+      | stats sum(hits) as hits earliest(first_seen) as first_seen latest(last_seen) as last_seen latest(src_index) as src_index latest(labels) as labels by indicator type ioc
+      | lookup opencti_seenbefore_kv indicator,type OUTPUT ioc_rating cleared decided_at decided_by note
+      | where (isnull($type_filter$) OR $type_filter$="" OR type=$type_filter$)
+      | where (isnull($bu_filter$) OR $bu_filter$="" OR like(labels, "%$bu_filter$%"))
+      | eval Rating=coalesce(ioc_rating, "Unreviewed")
+    </query>
+    <earliest>$time.earliest$</earliest>
+    <latest>$time.latest$</latest>
+  </search>
+
+  <row>
+    <panel>
+      <single>
+        <title>Total IOCs with matches</title>
+        <search base="base_ioc_summary">
+          <query>| stats dc(indicator) as IOCs</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Reviewed IOCs (Malicious/Benign/Cleared)</title>
+        <search base="base_ioc_summary">
+          <query>| eval reviewed=if(Rating!="Unreviewed", indicator, null()) | stats dc(reviewed) as Reviewed_IOCs</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Unreviewed IOCs</title>
+        <search base="base_ioc_summary">
+          <query>| eval unreviewed=if(Rating="Unreviewed", indicator, null()) | stats dc(unreviewed) as Unreviewed_IOCs</query>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Cleared IOCs</title>
+        <search base="base_ioc_summary">
+          <query>| eval cleared_ioc=if(cleared=1, indicator, null()) | stats dc(cleared_ioc) as Cleared_IOCs</query>
+        </search>
+      </single>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <chart>
+        <title>Decisions per day by rating</title>
+        <search>
+          <query>
+            | inputlookup opencti_seenbefore_kv
+            | where isnotnull(decided_at)
+            | eval _time=decided_at
+            | eval rating=coalesce(ioc_rating,"Unreviewed")
+            | timechart span=1d count by rating
+          </query>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>IOC coverage by rating</title>
+        <search base="base_ioc_summary">
+          <query>| stats dc(indicator) as iocs by Rating | sort - iocs</query>
+        </search>
+        <option name="charting.chart">bar</option>
+        <option name="charting.legend.placement">right</option>
+      </chart>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>IOC backlog (Unreviewed)</title>
+        <search base="base_ioc_summary">
+          <query>
+            | where Rating="Unreviewed"
+            | eval "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | rename indicator AS Indicator type AS Type src_index AS Index
+            | table Indicator Type hits Index "First Time Seen" "Last Time Seen"
+            | sort - hits
+            | head 25
+          </query>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+    <panel>
+      <table>
+        <title>Top sources (by IOC matches)</title>
+        <search base="base_ioc_summary">
+          <query>| stats sum(hits) as hits dc(indicator) as iocs by src_index | sort - hits | head 15</query>
+        </search>
+        <option name="count">15</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Recently decided IOCs</title>
+        <search>
+          <query>
+            | inputlookup opencti_seenbefore_kv
+            | where isnotnull(decided_at)
+            | eval _time=decided_at
+            | eval Rating=coalesce(ioc_rating,"Unreviewed")
+            | eval "Decided At"=strftime(decided_at, "%d %b %Y %H:%M:%S")
+            | table indicator type Rating decided_by "Decided At" note
+            | sort - "Decided At"
+            | head 25
+          </query>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+  </row>
+
+  <row>
+    <panel>
+      <table>
+        <title>Malicious IOCs marked Cleared (seen again?)</title>
+        <search base="base_ioc_summary">
+          <query>
+            | where Rating="malicious" AND cleared=1
+            | eval seen_after_cleared=if(isnotnull(decided_at) AND last_seen&gt;decided_at, "Yes","No")
+            | eval "Last Time Seen"=strftime(last_seen, "%d %b %Y %H:%M:%S"), "First Time Seen"=strftime(first_seen, "%d %b %Y %H:%M:%S")
+            | rename indicator AS Indicator type AS Type src_index AS Index
+            | table Indicator Type hits Index seen_after_cleared "First Time Seen" "Last Time Seen"
+            | sort - hits
+            | head 25
+          </query>
+        </search>
+        <option name="count">25</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>
