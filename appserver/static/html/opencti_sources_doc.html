@@ -96,6 +96,36 @@ email – SMTP logs             → index=smtp_logs fields=sender,recipient
 email – O365 message trace    → index=o365_email fields=sender_address,recipient_address
     </pre>
 
+    <h3>Exclude options (text vs regex)</h3>
+    <p>
+      Both Basic and Regex correlations let you configure optional exclusion logic:
+    </p>
+    <ul>
+      <li><strong>Exclude text</strong>: one or more simple strings; events where the target fields contain any of these values are dropped before matching. Matching is case-sensitive. For most IOC types (domain, URL, hash, email) the engine normalizes candidate values to lowercase first, so you should also provide the exclude text in lowercase for consistent behavior. For those IOC types, you should enter the exclude text in lowercase, even if it appears as <code>WAN2</code> in the original field. The raw syslog message remains untouched; only the extracted/normalized IOC field is lowercased for matching.</li>
+      <li><strong>Exclude regex</strong>: an advanced regular expression; use this when you truly need complex matching. Regex is more flexible but slightly more expensive than simple text comparisons.</li>
+    </ul>
+    <p>
+      Under the hood both values are stored alongside the correlation definition. The Threat Match engine will first apply any configured exclude filters, then perform IOC extraction and matching.
+    </p>
+
+    <h3>Regex extraction patterns</h3>
+    <p>
+      The Regex Correlation tab lets you extract IOCs from free-form text fields using regular expressions. The app reuses the same patterns it uses when building the OpenCTI KV stores; the most useful ones are:
+    </p>
+    <ul>
+      <li><strong>Domain</strong>: <code>[A-Za-z0-9.-]+\.[A-Za-z]{2,}</code> — matches typical DNS-style hostnames.</li>
+      <li><strong>URL (full value)</strong>: <code>^https?://.+</code> — matches HTTP/HTTPS URLs; you can drop the <code>^</code> anchor if the URL appears in the middle of a string.</li>
+      <li><strong>Hash (md5/sha1/sha256)</strong>: <code>(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})</code> — matches common hexadecimal hash lengths.</li>
+      <li><strong>Email</strong>: <code>[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}</code> — matches most RFC-style email addresses.</li>
+      <li><strong>IPv4 (single IPs in events)</strong>: <code>[0-9]{1,3}(?:\.[0-9]{1,3}){3}</code> — use this when your log events contain individual IPs such as <code>10.0.0.1</code> or <code>192.0.2.5</code>.</li>
+      <li><strong>IPv4 CIDR (ranges)</strong>: <code>[0-9]{1,3}(?:\.[0-9]{1,3}){3}/[0-9]{1,2}</code> — use this only if your events literally contain CIDR strings such as <code>203.0.113.0/24</code> that you want to treat as IOCs.</li>
+      <li><strong>IPv6</strong>: <code>[0-9A-Fa-f:]+</code> — matches IPv6 address strings.</li>
+      <li><strong>IPv6 CIDR</strong>: <code>[0-9A-Fa-f:]+/[0-9]{1,3}</code> — matches IPv6 ranges like <code>2001:db8::/32</code>.</li>
+    </ul>
+    <p>
+      You can copy these into the IOC Extraction Regex field in the Regex Correlation modal and adjust anchors (<code>^</code>, <code>$</code>) or surrounding context as needed for your specific log format.
+    </p>
+
     <h2>Email section</h2>
     <p>
       For Email correlations, choose indexes that contain SMTP-style events and specify fields that carry sender/recipient
@@ -108,6 +138,7 @@ email – O365 message trace    → index=o365_email fields=sender_address,recip
       <li>If you see errors when creating or editing a correlation, ensure your Splunk role can read and write KV store data for this app.</li>
       <li>If threat-match dashboards show no hits, confirm that your source indexes and fields actually contain the expected indicators for the time window.</li>
       <li>If you suspect performance issues, look for correlations that repeatedly scan the same heavy index and consolidate them where possible.</li>
+      <li>Use the “Run Backfill” button with care. It opens a one-time backfill search using the same Threat Match logic but without the 5-minute index-time gate. Backfills over large time ranges are expensive, can consume significant search capacity, and can create duplicate summary events in <code>index=opencti_alerts</code> for time windows already covered by the scheduled engine. Always narrow the time range before running the backfill search.</li>
     </ul>
   </body>
 </html>

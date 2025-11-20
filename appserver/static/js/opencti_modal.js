@@ -10,7 +10,7 @@ define([
       const defaults = {
         title: 'Modal Title',
         destroyOnHide: true,
-        width: '50%',
+        width: null,
       };
 
       const modalOptions = _.extend(defaults, options || {});
@@ -18,8 +18,12 @@ define([
 
       this.$el = $('<div>')
         .addClass('modal fade')
-        .attr({ role: 'dialog', tabindex: '-1' })
-        .css({ width: modalOptions.width });
+        .addClass('opencti-modal-wide')
+        .attr({ role: 'dialog', tabindex: '-1' });
+
+      if (modalOptions.width) {
+        this.$el.css({ width: modalOptions.width });
+      }
 
       const content = $('<div>').addClass('modal-content');
       const header = $('<div>').addClass('modal-header');
@@ -36,7 +40,12 @@ define([
         .addClass('modal-title')
         .text(modalOptions.title);
 
-      this.body = $('<div>').addClass('modal-body');
+      this.body = $('<div>')
+        .addClass('modal-body')
+        .css({
+          'max-height': '70vh',
+          'overflow-y': 'auto',
+        });
       this.footer = $('<div>').addClass('modal-footer');
 
       content.append(header.append(headerCloseButton, title), this.body, this.footer);
@@ -199,7 +208,7 @@ define([
 
       if (searchName) {
         form
-          .append($('<label>').text('Name*'))
+          .append($('<label>').addClass('opencti-modal-label').text('Name*'))
           .append(
             $('<input>').attr({
               type: 'text',
@@ -219,7 +228,7 @@ define([
           );
       } else {
         form
-          .append($('<label>').text('Name*'))
+          .append($('<label>').addClass('opencti-modal-label').text('Name*'))
           .append(
             $('<input>').attr({
               type: 'text',
@@ -232,7 +241,7 @@ define([
       }
 
       form
-        .append($('<label>').text('Description'))
+        .append($('<label>').addClass('opencti-modal-label').text('Description'))
         .append(
           $('<textarea>').attr({
             id: 'openctiCorrelationDescription',
@@ -262,10 +271,29 @@ define([
         );
       });
 
-      form.append($('<label>').text('IOC Type*')).append(iocTypeSelect);
+      form.append($('<label>').addClass('opencti-modal-label').text('IOC Type*')).append(iocTypeSelect);
+
+      // Show indexes above fields for better flow
+      form
+        .append($('<label>').addClass('opencti-modal-label').text('List of Indexes*'))
+        .append(
+          $('<input>').attr({
+            type: 'text',
+            id: 'openctiCorrelationIndexes',
+            name: 'openctiCorrelationIndexes',
+            class: 'form-control',
+            required: true,
+            placeholder: 'index1,index2,index3',
+          })
+        )
+        .append(
+          $('<p class="input-description">').text(
+            'Enter a comma-separated list of index names (no spaces, no wildcards like index=*).'
+          )
+        );
 
       form
-        .append($('<label>').text('List of Fields*'))
+        .append($('<label>').addClass('opencti-modal-label').text('List of Fields*'))
         .append(
           $('<input>').attr({
             type: 'text',
@@ -283,20 +311,36 @@ define([
         );
 
       form
-        .append($('<label>').text('List of Indexes*'))
+        .append($('<label>').addClass('opencti-modal-label').text('Exclude text (optional)'))
         .append(
           $('<input>').attr({
             type: 'text',
-            id: 'openctiCorrelationIndexes',
-            name: 'openctiCorrelationIndexes',
+            id: 'openctiCorrelationExcludeText',
+            name: 'openctiCorrelationExcludeText',
             class: 'form-control',
-            required: true,
-            placeholder: 'index1,index2,index3',
+            placeholder: 'text1,text2 (e.g. blocked,internal)',
           })
         )
         .append(
           $('<p class="input-description">').text(
-            'Enter a comma-separated list of index names (no spaces, no wildcards like index=*).'
+            'Comma-separated simple text values to exclude (no spaces between commas). Events where the target fields contain any of these values will be excluded before matching. Matching is case-sensitive, and most IOC candidates are normalized to lowercase, so enter exclude text in lowercase.'
+          )
+        );
+
+      form
+        .append($('<label>').addClass('opencti-modal-label').text('Exclude regex (optional)'))
+        .append(
+          $('<input>').attr({
+            type: 'text',
+            id: 'openctiCorrelationExcludeRegex',
+            name: 'openctiCorrelationExcludeRegex',
+            class: 'form-control',
+            placeholder: 'regex1,regex2 (advanced)',
+          })
+        )
+        .append(
+          $('<p class="input-description">').text(
+            'Comma-separated regex patterns to exclude events (advanced). Use text exclude above for simple cases.'
           )
         );
 
@@ -322,6 +366,8 @@ define([
         $('#openctiIocType').val(data.ioc_type || '');
         $('#openctiCorrelationFields').val(data.fields || '');
         $('#openctiCorrelationIndexes').val(data.indexes || '');
+        $('#openctiCorrelationExcludeText').val(data.exclude_text || '');
+        $('#openctiCorrelationExcludeRegex').val(data.exclude_regex || '');
       } catch (err) {
         console.error('Error fetching saved search:', err);
       } finally {
@@ -336,6 +382,8 @@ define([
         iocType: $('#openctiIocType').val(),
         correlationFields: $('#openctiCorrelationFields').val(),
         correlationIndexes: $('#openctiCorrelationIndexes').val(),
+        excludeText: $('#openctiCorrelationExcludeText').val(),
+        excludeRegex: $('#openctiCorrelationExcludeRegex').val(),
       };
     }
 
@@ -348,8 +396,9 @@ define([
         fields: formData.correlationFields,
         enabled: 1,
         correlation_mode: 'basic',
+        exclude_text: formData.excludeText,
         regex_pattern: '',
-        exclude_regex: '',
+        exclude_regex: formData.excludeRegex,
       };
     }
   }
@@ -399,7 +448,7 @@ define([
 
       if (searchName) {
         form
-          .append($('<label>').text('Name*'))
+          .append($('<label>').addClass('opencti-modal-label').text('Name*'))
           .append(
             $('<input>').attr({
               type: 'text',
@@ -419,7 +468,7 @@ define([
           );
       } else {
         form
-          .append($('<label>').text('Name*'))
+          .append($('<label>').addClass('opencti-modal-label').text('Name*'))
           .append(
             $('<input>').attr({
               type: 'text',
@@ -432,7 +481,7 @@ define([
       }
 
       form
-        .append($('<label>').text('Description'))
+        .append($('<label>').addClass('opencti-modal-label').text('Description'))
         .append(
           $('<textarea>').attr({
             id: 'openctiRegexDescription',
@@ -462,10 +511,10 @@ define([
         );
       });
 
-      form.append($('<label>').text('IOC Type*')).append(iocTypeSelect);
+      form.append($('<label>').addClass('opencti-modal-label').text('IOC Type*')).append(iocTypeSelect);
 
       form
-        .append($('<label>').text('List of Indexes*'))
+        .append($('<label>').addClass('opencti-modal-label').text('List of Indexes*'))
         .append(
           $('<input>').attr({
             type: 'text',
@@ -483,7 +532,7 @@ define([
         );
 
       form
-        .append($('<label>').text('List of Fields*'))
+        .append($('<label>').addClass('opencti-modal-label').text('List of Fields*'))
         .append(
           $('<input>').attr({
             type: 'text',
@@ -501,7 +550,7 @@ define([
         );
 
       form
-        .append($('<label>').text('IOC Extraction Regex*'))
+        .append($('<label>').addClass('opencti-modal-label').text('IOC Extraction Regex*'))
         .append(
           $('<input>').attr({
             type: 'text',
@@ -518,20 +567,86 @@ define([
           )
         );
 
+      const suggestionsList = $('<ul class="input-description">')
+        .append(
+          $('<li>').html(
+            'Domain: <code>[A-Za-z0-9.-]+\\.[A-Za-z]{2,}</code>'
+          )
+        )
+        .append(
+          $('<li>').html(
+            'URL (full value): <code>^https?://.+</code>'
+          )
+        )
+        .append(
+          $('<li>').html(
+            'Hash (md5/sha1/sha256): <code>(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64})</code>'
+          )
+        )
+        .append(
+          $('<li>').html(
+            'Email: <code>[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}</code>'
+          )
+        )
+        .append(
+          $('<li>').html(
+            'IPv4 (single IPs in events, e.g. 10.0.0.1): <code>[0-9]{1,3}(?:\\.[0-9]{1,3}){3}</code>'
+          )
+        )
+        .append(
+          $('<li>').html(
+            'IPv4 CIDR (only if your events literally contain ranges like 203.0.113.0/24): <code>[0-9]{1,3}(?:\\.[0-9]{1,3}){3}/[0-9]{1,2}</code>'
+          )
+        )
+        .append(
+          $('<li>').html(
+            'IPv6: <code>[0-9A-Fa-f:]+</code>'
+          )
+        )
+        .append(
+          $('<li>').html(
+            'IPv6 CIDR: <code>[0-9A-Fa-f:]+/[0-9]{1,3}</code>'
+          )
+        );
+
+      form.append(
+        $('<p class="input-description">').text(
+          'Suggested patterns (taken from the OpenCTI KV builders; you can adjust anchors ^ and $ as needed for extraction):'
+        )
+      );
+      form.append(suggestionsList);
+
       form
-        .append($('<label>').text('Exclude Pattern (optional)'))
+        .append($('<label>').addClass('opencti-modal-label').text('Exclude text (optional)'))
         .append(
           $('<input>').attr({
             type: 'text',
-            id: 'openctiRegexExclude',
-            name: 'openctiRegexExclude',
+            id: 'openctiRegexExcludeText',
+            name: 'openctiRegexExcludeText',
             class: 'form-control',
-            placeholder: 'Regex to exclude events (e.g. .*blocked.*)',
+            placeholder: 'text1,text2 (e.g. blocked,internal)',
           })
         )
         .append(
           $('<p class="input-description">').text(
-            'Events where the target field(s) match this pattern will be excluded before IOC extraction.'
+            'Comma-separated simple text values to exclude (no spaces between commas). Events where the target field(s) contain any of these values will be excluded before IOC extraction. Matching is case-sensitive, and most IOC candidates are normalized to lowercase, so enter exclude text in lowercase.'
+          )
+        );
+
+      form
+        .append($('<label>').addClass('opencti-modal-label').text('Exclude regex (optional)'))
+        .append(
+          $('<input>').attr({
+            type: 'text',
+            id: 'openctiRegexExcludeRegex',
+            name: 'openctiRegexExcludeRegex',
+            class: 'form-control',
+            placeholder: 'regex1,regex2 (advanced)',
+          })
+        )
+        .append(
+          $('<p class="input-description">').text(
+            'Comma-separated regex patterns to exclude events (advanced). Use text exclude above for simple cases.'
           )
         );
 
@@ -558,7 +673,8 @@ define([
         $('#openctiRegexIndexes').val(data.indexes || '');
         $('#openctiRegexFields').val(data.fields || '');
         $('#openctiRegexPattern').val(data.regex_pattern || '');
-        $('#openctiRegexExclude').val(data.exclude_regex || '');
+        $('#openctiRegexExcludeText').val(data.exclude_text || '');
+        $('#openctiRegexExcludeRegex').val(data.exclude_regex || '');
       } catch (err) {
         console.error('Error fetching regex correlation:', err);
       } finally {
@@ -574,7 +690,8 @@ define([
         correlationIndexes: $('#openctiRegexIndexes').val(),
         correlationFields: $('#openctiRegexFields').val(),
         regexPattern: $('#openctiRegexPattern').val(),
-        excludeRegex: $('#openctiRegexExclude').val(),
+        excludeText: $('#openctiRegexExcludeText').val(),
+        excludeRegex: $('#openctiRegexExcludeRegex').val(),
       };
     }
 
@@ -587,6 +704,7 @@ define([
         fields: formData.correlationFields,
         enabled: 1,
         correlation_mode: 'regex',
+        exclude_text: formData.excludeText,
         regex_pattern: formData.regexPattern,
         exclude_regex: formData.excludeRegex,
       };

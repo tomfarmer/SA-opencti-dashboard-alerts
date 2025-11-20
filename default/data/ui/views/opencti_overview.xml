@@ -1,5 +1,5 @@
 <dashboard version="1.1" theme="dark">
-  <label>Analyst OpenCTI Threat Match Overview</label>
+  <label>Analyst Overview</label>
   <description>IOC matches summarized from your telemetry with drilldowns to raw events.</description>
 
   <init>

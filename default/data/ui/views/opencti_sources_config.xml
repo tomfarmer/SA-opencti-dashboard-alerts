@@ -1,10 +1,10 @@
 <dashboard
   version="1.1"
   theme="dark"
-  script="js/opencti_correlations_dashboard.js"
+  script="js/opencti_sources_config.js"
 >
-  <label>Correlations</label>
-  <description>Configure basic OpenCTI correlations for URL, Hash, Domain, IP, and Email indicators.</description>
+  <label>Configure Correlations</label>
+  <description>This page lets you map indexes and fields in your Splunk environment to OpenCTI IOCs (URLs, hashes, domains, IPs, and emails). Use it to define which data sources are searched for each IOC type, and to configure both basic and regex OpenCTI correlations and their exclusions. Refer to the Documentation button for details on regex usage, exclusions, and backfill performance considerations.</description>
 
   <row id="docButtonRow">
     <html>
@@ -28,6 +28,8 @@
           .opencti-correlations-container .button-row {
             margin-top: 10px;
             margin-bottom: 10px;
+            text-align: right;
+            padding-right: 15px;
           }
           .opencti-correlations-container .button-row .btn {
             margin-left: 0;
@@ -76,6 +78,26 @@
           }
           .opencti-correlations-table .slider.round:before {
             border-radius: 50%;
+          }
+
+          /* Modal styling */
+          .opencti-modal-label {
+            display: block;
+            margin-top: 10px;
+            font-weight: 600;
+          }
+          .modal .modal-body {
+            padding-top: 10px;
+          }
+          .modal.opencti-modal-wide {
+            width: 70%;
+            margin-left: -35%;
+          }
+          @media (max-width: 992px) {
+            .modal.opencti-modal-wide {
+              width: 95%;
+              margin-left: -47.5%;
+            }
           }
         </style>
       </head>

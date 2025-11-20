@@ -1,11 +1,27 @@
 define([
+  'jquery',
+  'splunk.util',
   'splunkjs/mvc',
-], function(mvc) {
+], function($, splunkUtil, mvc) {
 
-  const COLLECTION_PATH = '/services/storage/collections/data/opencti_tm_monitored_indexs_and_fields';
+  // Base REST path for the KV collection. Use /servicesNS with explicit app
+  // so we hit the correct namespace from Splunk Web.
+  const COLLECTION_REST_PATH = '/servicesNS/nobody/SA-opencti-dashboard-alerts/storage/collections/data/opencti_tm_monitored_indexs_and_fields';
+  // For raw AJAX calls, include the splunkd/__raw prefix explicitly.
+  const COLLECTION_URL = splunkUtil.make_url('/splunkd/__raw' + COLLECTION_REST_PATH);
 
   function createService() {
     return mvc.createService({ owner: 'nobody' });
+  }
+
+  function ajaxJson(method, url, payload) {
+    return $.ajax({
+      type: method,
+      url: url,
+      contentType: 'application/json',
+      dataType: 'json',
+      data: payload ? JSON.stringify(payload) : null,
+    });
   }
 
   function normalizeList(raw) {
@@ -46,7 +62,7 @@ define([
 
   async function listCorrelations() {
     const service = createService();
-    const respRaw = await service.get(COLLECTION_PATH, { output_mode: 'json' });
+    const respRaw = await service.get(COLLECTION_REST_PATH, { output_mode: 'json' });
     const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;
     return resp || [];
   }
@@ -54,7 +70,7 @@ define([
   async function getCorrelation(name) {
     const service = createService();
     const respRaw = await service.get(
-      COLLECTION_PATH + '/' + encodeURIComponent(name),
+      COLLECTION_REST_PATH + '/' + encodeURIComponent(name),
       { output_mode: 'json' }
     );
     const resp = typeof respRaw === 'string' ? JSON.parse(respRaw) : respRaw;
@@ -62,10 +78,10 @@ define([
   }
 
   async function saveCorrelation(data) {
-    const service = createService();
-
     const indexes = normalizeList(data.indexes);
     const fields = normalizeList(data.fields);
+    const excludeText = normalizeList(data.exclude_text);
+    const excludeRegex = normalizeList(data.exclude_regex);
 
     if (!indexes || !fields) {
       throw new Error('Indexes and fields are required');
@@ -73,6 +89,8 @@ define([
     if (hasWildcardIndex(indexes)) {
       throw new Error('index=* or wildcard indexes are not allowed');
     }
+
+    const service = createService();
 
     const now = Date.now();
     const user = await getCurrentUser(service);
@@ -87,8 +105,9 @@ define([
       enabled: data.enabled ? 1 : 0,
       last_updated: now,
       correlation_mode: mode,
+      exclude_text: excludeText || '',
       regex_pattern: data.regex_pattern || '',
-      exclude_regex: data.exclude_regex || '',
+      exclude_regex: excludeRegex || '',
     };
     if (user && !data.created_by) {
       payload.created_by = user;
@@ -96,14 +115,15 @@ define([
       payload.created_by = data.created_by;
     }
 
-    await service.post(COLLECTION_PATH, payload);
+    // Use a raw JSON POST so Splunkd sees Content-Type: application/json.
+    await ajaxJson('POST', COLLECTION_URL, payload);
   }
 
   async function updateCorrelation(name, data) {
-    const service = createService();
-
     const indexes = normalizeList(data.indexes);
     const fields = normalizeList(data.fields);
+    const excludeText = normalizeList(data.exclude_text);
+    const excludeRegex = normalizeList(data.exclude_regex);
 
     if (!indexes || !fields) {
       throw new Error('Indexes and fields are required');
@@ -111,6 +131,8 @@ define([
     if (hasWildcardIndex(indexes)) {
       throw new Error('index=* or wildcard indexes are not allowed');
     }
+
+    const service = createService();
 
     const now = Date.now();
     const mode = data.correlation_mode || 'basic';
@@ -123,19 +145,21 @@ define([
       enabled: data.enabled ? 1 : 0,
       last_updated: now,
       correlation_mode: mode,
+      exclude_text: excludeText || '',
       regex_pattern: data.regex_pattern || '',
-      exclude_regex: data.exclude_regex || '',
+      exclude_regex: excludeRegex || '',
     };
 
-    await service.post(
-      COLLECTION_PATH + '/' + encodeURIComponent(name),
+    await ajaxJson(
+      'POST',
+      COLLECTION_URL + '/' + encodeURIComponent(name),
       payload
     );
   }
 
   async function deleteCorrelation(name) {
     const service = createService();
-    await service.del(COLLECTION_PATH + '/' + encodeURIComponent(name));
+    await service.del(COLLECTION_REST_PATH + '/' + encodeURIComponent(name));
   }
 
   async function setEnabled(name, enabled) {
@@ -144,8 +168,9 @@ define([
       enabled: enabled ? 1 : 0,
       last_updated: Date.now(),
     };
-    await service.post(
-      COLLECTION_PATH + '/' + encodeURIComponent(name),
+    await ajaxJson(
+      'POST',
+      COLLECTION_URL + '/' + encodeURIComponent(name),
       payload
     );
   }

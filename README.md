@@ -58,6 +58,11 @@ Summary index model (important)
     - `backfill_ip_match_opencti`
     - `backfill_domains_answer_ip_match_opencti`
 
+  - Correlations and exclusions
+    - Basic correlations (configured via the Correlations UI) run every 5 minutes per IOC type, using the KV collection `opencti_tm_monitored_indexs_and_fields` to drive which indexes and fields are searched.
+    - These basic correlations now fully support multi‑string and multi‑regex exclusions per correlation via `exclude_text` and `exclude_regex`.
+    - The exclusion logic lives inside the `m_otm_*_correlation` macros, so when dedicated regex correlation saved searches are added, they can reuse the same pipeline by passing the same `exclude_text` / `exclude_regex` arguments along with their extracted IOC field.
+
 ### Public‑only IP matching (dropping private space)
 - IP candidate extraction (`m_extract_ip_candidates` in `default/macros.conf`) now:
   - Builds a unified `ip` field from common src/dest fields.
@@ -132,7 +137,7 @@ Summary index model (important)
 
 ## How To Use
 - Dashboards
-  - Analyst OpenCTI Threat Match Overview (`default/data/ui/views/opencti_overview.xml`)
+  - Analyst Overview (`default/data/ui/views/opencti_overview.xml`)
     - Summary tiles for flagged Files/Domains/URLs/IPs.
     - “Domain Matches” and “IP Matches” tables with columns: Rating, Indicator, Score, Times Seen, Tags, Created By, Confidence, First/Last Time Seen, Index.
     - Click a row to populate action buttons (set IOC rating), show the source index, and open a ±5s raw‑event drilldown.
@@ -174,7 +179,7 @@ Summary index model (important)
     - Predictability: Normalization (lowercasing, scheme/trailing dot removal) makes the matching behavior deterministic across sources.
 
 - Packaging
-  - App label: “OpenCTI Threat Match Dashboard”; dashboard title: “Analyst OpenCTI Threat Match Overview”.
+  - App label: “OpenCTI Threat Match Dashboard”; dashboard title: “Analyst Overview”.
   - App icon/logo: place `appserver/static/appIcon.png` (48×48) and `appserver/static/appLogo.png` (≈72×72). Optional dark variants: `appIconAlt.png`, `appLogoAlt.png`.
   - Build script: `scripts/build.sh` produces a tarball that unpacks as `SA-opencti-threat-match-dashboard`.
 

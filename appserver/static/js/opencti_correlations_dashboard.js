@@ -26,7 +26,14 @@ require([
     }
 
     function updatePagination() {
-      const numPages = Math.ceil(rows.length / pageSize) || 1;
+      const numPages = Math.ceil(rows.length / pageSize);
+
+      if (numPages <= 1) {
+        $pagination.empty().hide();
+        return;
+      }
+
+      $pagination.show();
       $pagination.empty();
 
       const prevButton = $('<button class="btn btn-secondary">&laquo; Previous</button>');
@@ -70,6 +77,77 @@ require([
 
     showPage(currentPage);
     updatePagination();
+  }
+
+  function buildCorrelationSearchQuery(correlation, isRegex) {
+    const name = correlation._key || correlation.name || '';
+    const iocType = (correlation.ioc_type || '').toLowerCase();
+    const indexes = (correlation.indexes || '').split(',').filter(function(i) { return i; });
+    const fields = (correlation.fields || '').split(',').filter(function(f) { return f; });
+    const excludeText = correlation.exclude_text || '';
+    const excludeRegex = correlation.exclude_regex || '';
+    const regexPattern = correlation.regex_pattern || '';
+
+    if (!name || !iocType || indexes.length === 0 || fields.length === 0) {
+      return '';
+    }
+
+    const indexExpr = 'index=' + indexes.join(' OR index=');
+
+    function buildFieldExpr(forRegex) {
+      if (iocType === 'ip' || iocType === 'email' || forRegex) {
+        const quoted = fields.map(function(f) { return '\'' + f + '\''; });
+        return 'mvappend(' + quoted.join(',') + ')';
+      }
+      if (fields.length === 1) {
+        return fields[0];
+      }
+      return 'coalesce(' + fields.join(',') + ')';
+    }
+
+    let macroName;
+    if (isRegex) {
+      if (iocType === 'domain') {
+        macroName = 'm_otm_domain_regex_correlation_backfill';
+      } else if (iocType === 'ip') {
+        macroName = 'm_otm_ip_regex_correlation_backfill';
+      } else if (iocType === 'url') {
+        macroName = 'm_otm_url_regex_correlation_backfill';
+      } else if (iocType === 'hash') {
+        macroName = 'm_otm_hash_regex_correlation_backfill';
+      } else if (iocType === 'email') {
+        macroName = 'm_otm_email_regex_correlation_backfill';
+      } else {
+        return '';
+      }
+    } else {
+      if (iocType === 'domain') {
+        macroName = 'm_otm_domain_correlation_backfill';
+      } else if (iocType === 'ip') {
+        macroName = 'm_otm_ip_correlation_backfill';
+      } else if (iocType === 'url') {
+        macroName = 'm_otm_url_correlation_backfill';
+      } else if (iocType === 'hash') {
+        macroName = 'm_otm_hash_correlation_backfill';
+      } else if (iocType === 'email') {
+        macroName = 'm_otm_email_correlation_backfill';
+      } else {
+        return '';
+      }
+    }
+
+    const fieldExpr = buildFieldExpr(isRegex);
+    const safeExcludeText = excludeText || '';
+    const safeExcludeRegex = excludeRegex || '';
+
+    if (isRegex) {
+      const safePattern = regexPattern || '';
+      return '| `' + macroName + '("' + name + '","' + indexExpr + '",' + fieldExpr +
+        ',"' + safePattern + '","' + safeExcludeText + '","' + safeExcludeRegex + '")`';
+    }
+
+    return '| `' + macroName + '("' + name + '","' + indexExpr + '",' + fieldExpr +
+      ',"' + safeExcludeText + '","' + safeExcludeRegex + '")`';
   }
 
   function buildRow(correlation, isRegex) {
@@ -116,7 +194,20 @@ require([
     const $editButton = $('<button class="btn btn-danger btn-sm edit-button">Edit</button>')
       .attr('data-search-name', name)
       .attr('data-mode', correlation.correlation_mode || 'basic');
-    $actions.append($deleteButton, ' ', $editButton);
+    const $openSearchButton = $('<button class="btn btn-secondary btn-sm open-search-button">Run Backfill</button>')
+      .attr('data-search-name', name)
+      .attr('data-mode', correlation.correlation_mode || 'basic')
+      .attr('data-ioc-type', correlation.ioc_type || '')
+      .attr('data-indexes', indexList)
+      .attr('data-fields', fieldList)
+      .attr('data-regex-pattern', correlation.regex_pattern || '')
+      .attr('data-exclude-text', correlation.exclude_text || '')
+      .attr('data-exclude-regex', correlation.exclude_regex || '')
+      .attr(
+        'title',
+        'Runs a one-time backfill using this correlation. Use with narrow time ranges; backfills are expensive and can create duplicate summary events.'
+      );
+    $actions.append($deleteButton, ' ', $editButton, ' ', $openSearchButton);
     $row.append($actions);
 
     return $row;
@@ -249,4 +340,46 @@ require([
   });
 
   populateTable();
+
+  $(tablesSelector).on('click', '.open-search-button', function() {
+    const $btn = $(this);
+    const modeAttr = ($btn.data('mode') || 'basic').toString().toLowerCase();
+    const isRegex = modeAttr === 'regex';
+    const name = $btn.data('search-name') || '';
+
+    const warning =
+      'WARNING!!!\n\n' +
+      'This will open a backfill search for correlation \"' +
+      name +
+      '\".\n\n' +
+      '- Backfills over large time ranges are expensive and can consume significant search capacity.\n' +
+      '- Results are written into index=opencti_alerts and may create duplicate summary events for time windows ' +
+      'already covered by the 5-minute Threat Match engine.\n\n' +
+      'You should narrow the time range in the Search UI before running the query.\n\n' +
+      'WARNING!!!';
+    if (!confirm(warning)) {
+      return;
+    }
+
+    const correlation = {
+      _key: name,
+      name: name,
+      ioc_type: $btn.data('ioc-type') || '',
+      indexes: $btn.data('indexes') || '',
+      fields: $btn.data('fields') || '',
+      regex_pattern: $btn.data('regex-pattern') || '',
+      exclude_text: $btn.data('exclude-text') || '',
+      exclude_regex: $btn.data('exclude-regex') || '',
+    };
+
+    const query = buildCorrelationSearchQuery(correlation, isRegex);
+    if (!query) {
+      showToast('Unable to build SPL for this correlation. Check configuration.', 'error');
+      return;
+    }
+
+    const url = '/en-US/app/search/search?q=' + encodeURIComponent(query) +
+      '&earliest=-24h@h&latest=now';
+    window.open(url, '_blank');
+  });
 });
