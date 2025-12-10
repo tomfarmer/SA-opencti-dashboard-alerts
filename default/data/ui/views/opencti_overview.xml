@@ -31,7 +31,7 @@
       <single>
         <title>Flagged Files</title>
         <search base="base">
-          <query>| search sourcetype="opencti:file_hash_match" | eval indicator=coalesce(hash,ioc,match_value) | stats latest(last_seen) as ls by indicator | eval ls=tonumber(ls) | where ls&gt;=relative_time(now(), "$time.earliest$") | stats count</query>
+          <query>| search sourcetype="opencti:file_hash_match" | eval indicator=coalesce(hash,ioc,match_value) | stats dc(indicator) as count</query>
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
@@ -51,16 +51,11 @@
     <panel>
       <single>
         <title>Flagged Domains</title>
-        <search>
-          <query>
-            index=opencti_alerts sourcetype=opencti:domain_match earliest=$time.earliest$ latest=$time.latest$
+        <search base="base">
+          <query>| search sourcetype="opencti:domain_match"
             | eval domain=coalesce(match_value, fqdn, domain, ioc)
             | where isnotnull(domain) AND domain!=""
-            | stats latest(last_seen) as ls by domain
-            | eval ls=tonumber(ls)
-            | where ls&gt;=relative_time(now(), "$time.earliest$")
-            | stats count
-          </query>
+            | stats dc(domain) as count</query>
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
@@ -81,7 +76,7 @@
       <single>
         <title>Flagged URLs</title>
         <search base="base">
-          <query>| search sourcetype="opencti:url_match" | stats latest(last_seen) as ls by url_candidate | eval ls=tonumber(ls) | where ls&gt;=relative_time(now(), "$time.earliest$") | stats count</query>
+          <query>| search sourcetype="opencti:url_match" | stats dc(url_candidate) as count</query>
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
@@ -101,14 +96,9 @@
     <panel>
       <single>
         <title>Flagged IP addresses</title>
-        <search>
-          <query>
-            index=opencti_alerts sourcetype=opencti:ip_match earliest=$time.earliest$ latest=$time.latest$
-            | stats latest(last_seen) as ls by ip
-            | eval ls=tonumber(ls)
-            | where ls&gt;=relative_time(now(), "$time.earliest$")
-            | stats count
-          </query>
+        <search base="base">
+          <query>| search sourcetype="opencti:ip_match"
+            | stats dc(ip) as count</query>
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>
@@ -127,8 +117,9 @@
     <panel>
       <single>
         <title>Flagged Emails</title>
-        <search>
-          <query>index=opencti_alerts sourcetype=opencti:email_match earliest=$time.earliest$ latest=$time.latest$ | eval email=lower(email) | stats latest(last_seen) as ls by email ioc score role | eval ls=tonumber(ls) | where ls&gt;=relative_time(now(), "$time.earliest$") | stats count</query>
+        <search base="base">
+          <query>| search sourcetype=opencti:email_match | eval email=lower(email)
+            | stats latest(last_seen) by email ioc score role | stats count</query>
         </search>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x39ac4c","0xc52420"]</option>

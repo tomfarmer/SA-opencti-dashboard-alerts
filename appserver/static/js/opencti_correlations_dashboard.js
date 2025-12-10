@@ -1,9 +1,9 @@
 require([
   'underscore',
   'jquery',
-  'app/SA-opencti-dashboard-alerts/js/opencti_saved_search',
-  'app/SA-opencti-dashboard-alerts/js/opencti_modal',
-  '/static/app/TA-virustotal-app/js/components/vt-toast.js',
+  'app/SA-OpenCTIThreatMatch/js/opencti_saved_search',
+  'app/SA-OpenCTIThreatMatch/js/opencti_modal',
+  '/static/app/TA-virustotal-app/js/components/vt-toast.9ac17a3e.js',
   'splunkjs/mvc/simplexml/ready!',
 ], function(_, $, configApi, openctiModal) {
 
@@ -334,7 +334,7 @@ require([
   $('#openctiDocButton').on('click', function() {
     const docModal = new openctiModal.ModalDoc({
       title: 'OpenCTI Correlations Dashboard Documentation',
-      docUrl: '/static/app/SA-opencti-dashboard-alerts/html/opencti_sources_doc.html',
+      docUrl: '/static/app/SA-OpenCTIThreatMatch/html/opencti_sources_doc.html',
     });
     docModal.show();
   });

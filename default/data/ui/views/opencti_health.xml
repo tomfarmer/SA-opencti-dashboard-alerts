@@ -78,7 +78,7 @@
         <title>Scheduler status (last 24h)</title>
         <search>
           <query>
-            index=_internal sourcetype=scheduler app=SA-opencti-dashboard-alerts earliest=-24h
+            index=_internal sourcetype=scheduler app=SA-OpenCTIThreatMatch earliest=-24h
             | stats latest(status) as last_status latest(_time) as last_run_epoch by savedsearch_name
             | eval last_runtime=strftime(last_run_epoch, "%H:%M %d %m %Y")
             | fields savedsearch_name last_status last_runtime

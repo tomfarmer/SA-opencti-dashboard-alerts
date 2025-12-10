@@ -203,11 +203,11 @@ Use this sequence to reset and repopulate all KVs so you can test changes determ
    - Notes: these commands overwrite the collection with an empty set (no append), effectively clearing it.
 
 2) Repopulate IOC match KVs from the master lookup
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_domains_kv`
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_ips_kv`
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_urls_kv`
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_hashes_kv`
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_emails_kv`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_domains_kv`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_ips_kv`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_urls_kv`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_hashes_kv`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_emails_kv`
    - Tip: ensure `opencti_lookup` has content before running these.
 
 3) Clear the Threat‑Feed Current union KVs (optional)
@@ -218,18 +218,18 @@ Use this sequence to reset and repopulate all KVs so you can test changes determ
    - Emails: `| inputlookup opencti_threatfeed_current_email | head 0 | outputlookup opencti_threatfeed_current_email`
 
 4) Rebuild Threat‑Feed Current union KVs
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_domain`
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_ip`
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_url`
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_hash`
-   - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_email`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_domain`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_ip`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_url`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_hash`
+   - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_email`
 
 5) Generate fresh summaries (so new `threat_feed_at_match_time` is persisted)
-   - `| savedsearch SA-opencti-dashboard-alerts:domains_match_opencti`
-   - `| savedsearch SA-opencti-dashboard-alerts:ip_match_opencti`
-   - `| savedsearch SA-opencti-dashboard-alerts:url_match_opencti`
-   - `| savedsearch SA-opencti-dashboard-alerts:file_hash_match_opencti`
-   - `| savedsearch SA-opencti-dashboard-alerts:email_match_opencti`
+   - `| savedsearch SA-OpenCTIThreatMatch:domains_match_opencti`
+   - `| savedsearch SA-OpenCTIThreatMatch:ip_match_opencti`
+   - `| savedsearch SA-OpenCTIThreatMatch:url_match_opencti`
+   - `| savedsearch SA-OpenCTIThreatMatch:file_hash_match_opencti`
+   - `| savedsearch SA-OpenCTIThreatMatch:email_match_opencti`
 
 6) Verify KVs and summaries
    - IOC KVs:

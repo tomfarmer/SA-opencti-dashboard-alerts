@@ -6,7 +6,7 @@ define([
 
   // Base REST path for the KV collection. Use /servicesNS with explicit app
   // so we hit the correct namespace from Splunk Web.
-  const COLLECTION_REST_PATH = '/servicesNS/nobody/SA-opencti-dashboard-alerts/storage/collections/data/opencti_tm_monitored_indexs_and_fields';
+  const COLLECTION_REST_PATH = '/servicesNS/nobody/SA-OpenCTIThreatMatch/storage/collections/data/opencti_tm_monitored_indexs_and_fields';
   // For raw AJAX calls, include the splunkd/__raw prefix explicitly.
   const COLLECTION_URL = splunkUtil.make_url('/splunkd/__raw' + COLLECTION_REST_PATH);
 

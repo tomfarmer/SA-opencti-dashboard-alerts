@@ -45,21 +45,21 @@ Refresh For Testing (cheat sheet)
   - Hashes: `| inputlookup opencti_lookup_hash | head 0 | outputlookup opencti_lookup_hash`
   - Emails: `| inputlookup opencti_lookup_email | head 0 | outputlookup opencti_lookup_email`
 - Repopulate IOC match KVs:
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_domains_kv`
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_ips_kv`
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_urls_kv`
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_hashes_kv`
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_opencti_emails_kv`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_domains_kv`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_ips_kv`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_urls_kv`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_hashes_kv`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_opencti_emails_kv`
 - Clear Threat‑Feed Current KVs:
   - Domains/IPs/URLs/Hashes/Emails: `| inputlookup opencti_threatfeed_current_<type> | head 0 | outputlookup opencti_threatfeed_current_<type>`
 - Rebuild Threat‑Feed Current KVs:
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_domain`
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_ip`
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_url`
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_hash`
-  - `| savedsearch SA-opencti-dashboard-alerts:refresh_threatfeed_current_email`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_domain`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_ip`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_url`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_hash`
+  - `| savedsearch SA-OpenCTIThreatMatch:refresh_threatfeed_current_email`
 - Generate fresh summaries so `threat_feed_at_match_time` persists:
-  - `| savedsearch SA-opencti-dashboard-alerts:dns_match_opencti` … `email_match_opencti`
+  - `| savedsearch SA-OpenCTIThreatMatch:dns_match_opencti` … `email_match_opencti`
 
 ---
 Semantics: store‑time vs match‑time

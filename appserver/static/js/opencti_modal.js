@@ -1,8 +1,8 @@
 define([
   'underscore',
   'jquery',
-  'app/SA-opencti-dashboard-alerts/js/opencti_saved_search',
-  '/static/app/TA-virustotal-app/js/components/vt-toast.js',
+  'app/SA-OpenCTIThreatMatch/js/opencti_saved_search',
+  '/static/app/TA-virustotal-app/js/components/vt-toast.9ac17a3e.js',
 ], function(_, $, configApi) {
 
   class Modal {
