@@ -188,6 +188,9 @@ Summary index model (important)
 - Time semantics: Dashboards use `_time` (set to `last_seen`), while ingestion monitoring is easier with `_indextime`.
 - Troubleshooting
   - If matchers run but dashboards show blanks for Created By/Confidence, ensure the refreshers have populated those fields into the KV stores and that the saved searches include them before `collect`.
+  - If you see `[map]: Field '_ip_candidates' does not exist in the data.`, it typically means either (a) there were no events in the gated `_indextime` window (`m_index_time_gate` defaults to the last 5 minutes), or (b) none of the configured IP fields exist for that sourcetype. Widen the time gate or adjust the `fields` column in `opencti_tm_monitored_indexs_and_fields`.
+  - Private IPs: IP matchers in this app can be configured to include or exclude RFC1918/link-local/loopback. See `m_otm_ip_valid_any` vs `m_otm_ip_valid_public` in `default/macros.conf`.
+  - `maxsearches=50`: this is the `map` command limit (caps how many per-row searches Splunk will spawn). If you have >50 enabled rows in `opencti_tm_monitored_indexs_and_fields`, increase it.
   - Verify macros resolve as expected: `| makeresults | eval idx="`opencti_alerts_index`" | table idx`.
 
 ### Refresh For Testing
@@ -270,4 +273,5 @@ Tuning for your environment
 
 Tip: we centralized this as a macro. In `default/macros.conf` use:
 - `m_index_time_gate` for the default 5‑minute slice.
-- `m_index_time_gate_window("-10m@m")` if you prefer a different slice without editing every saved search.
+- `opencti_tm_index_time_gate_window` to change the default slice in one place (defaults to `"-5m@m"`).
+- `m_index_time_gate_window("-10m@m")` if you want an explicit one‑off slice in a specific search.
