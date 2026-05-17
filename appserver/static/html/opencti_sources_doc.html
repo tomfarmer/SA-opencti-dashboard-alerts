@@ -70,6 +70,7 @@ domain – Proxy / Web filter   → index=proxy_logs fields=host,domain
     <p><strong>IPs</strong></p>
     <pre>
 ip – Zeek conn                → index=zeek_conn fields=id.orig_h,id.resp_h
+ip – Zeek DNS answers         → index=zeek_dns fields=answers
 ip – Firewall perimeter       → index=firewall_main fields=src_ip,dst_ip
 ip – EDR network telemetry    → index=edr fields=remote_ip
 ip – Velociraptor artifacts   → index=velociraptor fields=dest_ip
@@ -85,7 +86,7 @@ hash – EDR collected binaries → index=edr fields=file_hash
 
     <p><strong>URLs</strong></p>
     <pre>
-url – Zeek HTTP               → index=zeek_http fields=uri,host
+url – Zeek HTTP               → index=zeek_http fields=url
 url – Proxy logs              → index=proxy_logs fields=url
 url – Image pipeline scraping → index=image_pipeline_strings fields=extracted_url
     </pre>

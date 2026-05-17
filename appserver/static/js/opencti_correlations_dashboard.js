@@ -82,8 +82,12 @@ require([
   function buildCorrelationSearchQuery(correlation, isRegex) {
     const name = correlation._key || correlation.name || '';
     const iocType = (correlation.ioc_type || '').toLowerCase();
-    const indexes = (correlation.indexes || '').split(',').filter(function(i) { return i; });
-    const fields = (correlation.fields || '').split(',').filter(function(f) { return f; });
+    const indexes = (correlation.indexes || '').split(',').map(function(i) {
+      return i.trim();
+    }).filter(function(i) { return i; });
+    const fields = (correlation.fields || '').split(',').map(function(f) {
+      return f.trim();
+    }).filter(function(f) { return f; });
     const excludeText = correlation.exclude_text || '';
     const excludeRegex = correlation.exclude_regex || '';
     const regexPattern = correlation.regex_pattern || '';
@@ -95,9 +99,16 @@ require([
     const indexExpr = 'index=' + indexes.join(' OR index=');
 
     function buildFieldExpr(forRegex) {
-      if (iocType === 'ip' || iocType === 'email' || forRegex) {
+      if (iocType === 'ip' || iocType === 'email' || iocType === 'hash' || forRegex) {
         const quoted = fields.map(function(f) { return '\'' + f + '\''; });
         return 'mvappend(' + quoted.join(',') + ')';
+      }
+      if (iocType === 'url') {
+        const quoted = fields.map(function(f) { return '\'' + f + '\''; });
+        if (quoted.length === 1) {
+          return quoted[0];
+        }
+        return 'coalesce(' + quoted.join(',') + ')';
       }
       if (fields.length === 1) {
         return fields[0];
@@ -142,11 +153,11 @@ require([
 
     if (isRegex) {
       const safePattern = regexPattern || '';
-      return '| `' + macroName + '("' + name + '","' + indexExpr + '",' + fieldExpr +
+      return '`' + macroName + '("' + name + '","' + indexExpr + '",' + fieldExpr +
         ',"' + safePattern + '","' + safeExcludeText + '","' + safeExcludeRegex + '")`';
     }
 
-    return '| `' + macroName + '("' + name + '","' + indexExpr + '",' + fieldExpr +
+    return '`' + macroName + '("' + name + '","' + indexExpr + '",' + fieldExpr +
       ',"' + safeExcludeText + '","' + safeExcludeRegex + '")`';
   }
 
@@ -378,7 +389,7 @@ require([
       return;
     }
 
-    const url = '/en-US/app/search/search?q=' + encodeURIComponent(query) +
+    const url = '/en-US/app/SA-OpenCTIThreatMatch/search?q=' + encodeURIComponent(query) +
       '&earliest=-24h@h&latest=now';
     window.open(url, '_blank');
   });

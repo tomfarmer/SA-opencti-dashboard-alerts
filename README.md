@@ -16,6 +16,7 @@ A Splunk app that enriches your network telemetry with OpenCTI indicators of com
        - URLs: `opencti_urls_kv` via transform `opencti_lookup_url` (match_type=WILDCARD(url))
        - File hashes: `opencti_hashes_kv` via transform `opencti_lookup_hash`
        - Emails: `opencti_emails_kv` via transform `opencti_lookup_email`
+       - Refresh searches intentionally read the upstream `value` field only; `name` is not used as a fallback IOC source.
     2) Threat‑feed union KVs (used for provenance/enrichment at read‑time; populated by refresh_threatfeed_current_* searches)
        - Domains: `threatfeed_current_domain_kv` via transform `opencti_threatfeed_current_domain`
        - IPs: `threatfeed_current_ip_kv` via transform `opencti_threatfeed_current_ip`
@@ -23,9 +24,9 @@ A Splunk app that enriches your network telemetry with OpenCTI indicators of com
        - File hashes: `threatfeed_current_hash_kv` via transform `opencti_threatfeed_current_hash`
        - Emails: `threatfeed_current_email_kv` via transform `opencti_threatfeed_current_email`
        - Schema per row: `ioc`, `threat_feed_current` (MV of producers), `feed_scores` (MV of `feed:score` pairs), `max_score`, `min_score`, `score_range` (e.g., `50–90`).
-  - Scheduled matchers read telemetry via macros and enrich with the IOC match KVs only (fast, deterministic matching), then dashboards optionally enrich with the union KVs to show “Threat Feed Current”.
-    - Domains: macro `domains_event_sources` (e.g., Zeek DNS)
-    - IP: macro `ip_event_sources` + `m_extract_ip_candidates`
+  - Scheduled matchers read enabled rows from the Correlations UI KV collection (`opencti_tm_monitored_indexs_and_fields`) and enrich matching telemetry with the IOC match KVs only (fast, deterministic matching), then dashboards optionally enrich with the union KVs to show “Threat Feed Current”.
+    - Domains, IPs, URLs, hashes, and emails all use configured `indexes` and `fields` from the KV collection.
+    - DNS answer IPs are handled by adding an enabled Basic IP row such as `indexes=zeek_dns`, `fields=answers`.
 - Matches are summarized and written to `index=opencti_alerts` (macro `opencti_alerts_index`) by `collect`.
 
 Summary index model (important)
@@ -36,7 +37,7 @@ Summary index model (important)
 - This keeps the summary small and dashboards fast. If you truly need one summary event per raw hit, the pipeline can be changed, but it’s rarely desirable.
 
 - Fields written to `index=opencti_alerts`
-  - From OpenCTI KV lookups (`opencti_lookup_domain` / `opencti_lookup_ip`):
+  - From OpenCTI KV lookups (`opencti_lookup_domain`, `opencti_lookup_ip`, `opencti_lookup_url`, `opencti_lookup_hash`, `opencti_lookup_email`):
     - `ioc` (original IOC name/value)
     - `score`
     - `labels`
@@ -44,38 +45,46 @@ Summary index model (important)
     - `confidence`
   - From telemetry/aggregation in this app:
     - Common: `hits`, `first_seen`, `last_seen`, `src_index`, `src_sourcetype`, `kind`, `_time` (set to `last_seen`), `alert_summary`
-    - DNS matches: `match_value` (domain), `matched_field` (query/answer)
-    - IP matches: `ip`, `role` (src/dest/unknown)
+    - Domain matches: `match_value`
+    - IP matches: `ip`, `correlation_name`
+    - URL matches: `url_candidate`
+    - File matches: `hash`
+    - Email matches: `email`
 
 - Saved searches (matchers & backfills)
   - Near‑real‑time (5 min):
     - `domains_match_opencti` (aggregates unique domains before lookup for efficiency)
     - `ip_match_opencti`
-    - `dns_answer_ip_match_opencti`
+    - `url_match_opencti`
+    - `file_hash_match_opencti`
     - `email_match_opencti` (aggregate → lookup → filter for emails; per‑combo write)
   - Backfills (ad‑hoc or scheduled off):
-    - `backfill_domains_match_opencti`
+    - `backfill_domain_match_opencti`
     - `backfill_ip_match_opencti`
-    - `backfill_domains_answer_ip_match_opencti`
+    - `backfill_url_match_opencti`
+    - `backfill_file_hash_match_opencti`
+    - `backfill_email_match_opencti`
 
   - Correlations and exclusions
     - Basic correlations (configured via the Correlations UI) run every 5 minutes per IOC type, using the KV collection `opencti_tm_monitored_indexs_and_fields` to drive which indexes and fields are searched.
+    - Basic searches treat missing or empty `correlation_mode` as `basic` for compatibility with older saved rows.
     - These basic correlations now fully support multi‑string and multi‑regex exclusions per correlation via `exclude_text` and `exclude_regex`.
     - The exclusion logic lives inside the `m_otm_*_correlation` macros, so when dedicated regex correlation saved searches are added, they can reuse the same pipeline by passing the same `exclude_text` / `exclude_regex` arguments along with their extracted IOC field.
 
 ### Public‑only IP matching (dropping private space)
-- IP candidate extraction (`m_extract_ip_candidates` in `default/macros.conf`) now:
+- IP candidate extraction in the `m_otm_ip_*` correlation macros now:
   - Builds a unified `ip` field from common src/dest fields.
   - Keeps only syntactically valid IPv4/IPv6 addresses.
-  - Explicitly drops private and non‑routable ranges:
-    - IPv4: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`.
-    - IPv6: `::1/128`, `fc00::/7` (ULA), `fe80::/10` (link‑local).
-- The DNS answers→IP matchers (NRT and backfill) use the same predicate before `m_opencti_lookup_ip(ip)`.
+  - Explicitly drops private and non-routable ranges:
+    - IPv4: `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`, `169.254.0.0/16`, `172.16.0.0/12`, `192.168.0.0/16`, `224.0.0.0/4`, `240.0.0.0/4`, `255.255.255.255/32`.
+    - IPv6: `::/128`, `::1/128`, `fc00::/7` (ULA), `fe80::/10` (link-local), `ff00::/8` (multicast).
+- DNS answer IP matching uses the same predicate when represented as a Basic IP correlation row, for example `indexes=zeek_dns`, `fields=answers`.
 - Result: OpenCTI IP lookups and alerts are restricted to public/external IPs; purely internal/private traffic is ignored by the threat‑matchers.
 
 - Handling IOC drift over time
   - Backfills re‑scan historical telemetry against the current IOC sets, capturing matches for indicators added or changed after events were first ingested.
-  - Summary `_time` is set to `last_seen` so dashboards reflect the true event chronology; to validate fresh writes, search by `_indextime`.
+  - The Splunk Search time picker controls which source events are scanned during a backfill.
+  - Summary `_time` is set to `last_seen` from the matched source event, not the wall-clock time when the backfill ran. This keeps dashboards aligned to when the activity happened; to validate fresh writes, search by `_indextime`.
 
 - “Seen again” + “Cleared” logic on the Analyst dashboard
   - The dashboard looks up analyst decisions from `opencti_seenbefore_kv` (via `opencti_seenbefore_kv` lookup), then evaluates `seen_again` as Yes/No based on whether a new `last_seen` is later than `decided_at`.
@@ -149,15 +158,16 @@ Summary index model (important)
   - On the Analyst dashboard row click, use buttons to mark Malicious/Benign/Clear. Actions write to `opencti_seenbefore_kv`; decisions immediately influence Rating and “Seen again”.
 
 - Running backfills
-  - Use the saved searches: `90_…`, `91_…`, `92_…` with your desired timepicker.
-  - For ad‑hoc single‑line variants, see comments above each saved search in `default/savedsearches.conf`.
-  - If you need immediate visibility in “Last 15 minutes” searches, either widen the time window or search by `_indextime` (backfills set `_time=last_seen`).
+  - Use the “Run Backfill” action on a correlation row, then narrow the Search time picker before running it.
+  - If invoking a map-based saved search manually with `| savedsearch`, include `nosubstitution=true` so Splunk does not consume the `$field$` tokens used by `map`.
+  - If you need immediate visibility for a backfill you just ran, search by `_indextime`; a “Last 15 minutes” `_time` search only shows matches whose source events happened in the last 15 minutes.
+  - Fresh-write validation example: `index=opencti_alerts earliest=-48h | where _indextime>=relative_time(now(), "-15m")`.
 
 ## Configuration & Customization
 - Macros you can tune
   - `opencti_alerts_index`: target summary index (default: `opencti_alerts`)
-  - `dns_event_sources`, `ip_event_sources`, `url_event_sources`, `files_event_sources`: define your source indexes.
-  - `m_extract_ip_candidates`: list of candidate fields for IP extraction.
+  - `opencti_tm_index_time_gate_window`: index-time slice used by near-real-time matchers.
+  - Source indexes and candidate fields should normally be changed in the Correlations UI, not in `macros.conf`.
 
 - Lookups & transforms
   - `opencti_lookup_domain` → `opencti_domains_kv` (WILDCARD(domain)) includes: domain, score, labels, created_by, confidence.
@@ -169,8 +179,11 @@ Summary index model (important)
     - We normalize to lowercase and strip any trailing dot, then store two patterns for each IOC: `domain.com` and `*.domain.com`.
     - The transform `opencti_lookup_domain` uses `match_type=WILDCARD(domain)`, so it matches the apex and any subdomain (for example `a.b.domain.com`).
   - URLs
-    - We strip `http(s)://`, lowercase, and store the host/path in `opencti_urls_kv`. The transform `opencti_lookup_url` uses `match_type=WILDCARD(url)`.
+    - We strip URL schemes, lowercase, and store the host/path in `opencti_urls_kv`. The transform `opencti_lookup_url` uses `match_type=WILDCARD(url)`.
     - This allows patterns like `example.com/*` and `*.example.com/*` to match across path segments and subdomains. Extraction builds candidates as `host.uri` or `host.uri_path` when available.
+  - File hashes
+    - Hash matching is exact by algorithm. An MD5 or SHA1 seen in telemetry will not match a SHA256-only OpenCTI IOC unless the same SHA256 is also present in telemetry or OpenCTI has the MD5/SHA1 IOC too.
+    - If your OpenCTI feed is SHA256-only, configure the source field as `sha256`. Include `md5` or `sha1` only when your OpenCTI hash KV also contains those algorithms.
   - IPs
     - We use network-aware matching via `match_type=CIDR(ip)` so `10.0.0.0/8` matches `10.1.2.3` (both IPv4 and IPv6 supported).
   - Why we do it this way
@@ -188,7 +201,7 @@ Summary index model (important)
 - Time semantics: Dashboards use `_time` (set to `last_seen`), while ingestion monitoring is easier with `_indextime`.
 - Troubleshooting
   - If matchers run but dashboards show blanks for Created By/Confidence, ensure the refreshers have populated those fields into the KV stores and that the saved searches include them before `collect`.
-  - If you see `[map]: Field '_ip_candidates' does not exist in the data.`, it typically means either (a) there were no events in the gated `_indextime` window (`m_index_time_gate` defaults to the last 5 minutes), or (b) none of the configured IP fields exist for that sourcetype. Widen the time gate or adjust the `fields` column in `opencti_tm_monitored_indexs_and_fields`.
+  - If you see `[map]: Field 'ip_candidates' does not exist in the data.`, it typically means either (a) there were no events in the gated `_indextime` window (`m_index_time_gate` defaults to the last 5 minutes), or (b) none of the configured IP fields exist for that sourcetype. Widen the time gate or adjust the `fields` column in `opencti_tm_monitored_indexs_and_fields`.
   - Private IPs: IP matchers in this app can be configured to include or exclude RFC1918/link-local/loopback. See `m_otm_ip_valid_any` vs `m_otm_ip_valid_public` in `default/macros.conf`.
   - `maxsearches=50`: this is the `map` command limit (caps how many per-row searches Splunk will spawn). If you have >50 enabled rows in `opencti_tm_monitored_indexs_and_fields`, increase it.
   - Verify macros resolve as expected: `| makeresults | eval idx="`opencti_alerts_index`" | table idx`.
@@ -249,7 +262,7 @@ Use this sequence to reset and repopulate all KVs so you can test changes determ
        `| table email threat_feed_at_match_time score role first_seen last_seen`
 
 ---
-If you need additional data sources, fields, or dashboards, extend the macros and saved searches and the dashboards will follow.
+If you need additional data sources or fields, add rows in the Correlations UI. Extend macros and saved searches only when adding a new matching behavior.
 
 ## Late‑Arriving Data (_indextime gating)
 
